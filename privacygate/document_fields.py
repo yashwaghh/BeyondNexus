@@ -24,7 +24,7 @@ _IDENTIFIERS = (
 _LABELS = [
     (_IDENTIFIERS, 'POSSIBLE_ID'),
     (r'(?:full|patient|employee|student|customer|account\s+holder|card\s+holder|'
-     r'father[\x27’]?s?|mother[\x27’]?s?|spouse[\x27’]?s?|given)\s+name|surname|name', 'PERSON'),
+     r'father[\x27’]?s?|mother[\x27’]?s?|spouse[\x27’]?s?|given)\s*name|surname|name', 'PERSON'),
     (r'(?:residential|permanent|present|mailing|billing|shipping|correspondence)?\s*address', 'ADDRESS'),
     (r'date\s+of\s+birth|d\.?o\.?b\.?|birth\s+date', 'DATE_OF_BIRTH'),
     (r'mobile|phone|telephone|contact(?:\s+(?:no\.?|number))?', 'PHONE'),
@@ -43,7 +43,7 @@ def _pattern(labels):
 _PATTERNS = [(_pattern(label), entity) for label, entity in _LABELS]
 _ALL_LABEL = re.compile(r'^(?:' + '|'.join(label for label, _ in _LABELS) + r')[ \t]*(?::|#|=)', re.I)
 _CARD_SHAPE = re.compile(r'(?<!\w)(?:[0-9][ -]?){12,18}[0-9](?!\w)')
-_MRZ = re.compile(r'^[ \t]*([A-Z0-9<]{30,44})[ \t]*$', re.M)
+_MRZ = re.compile(r'^[ \t]*([A-Z0-9<«» ][A-Z0-9<«» ]{28,78}[A-Z0-9<«»])[ \t]*$', re.M)
 
 
 def _luhn_valid(digits):
@@ -62,8 +62,9 @@ def detect_document_fields(text: str) -> list[Finding]:
             findings.append(Finding(*match.span(), 'POSSIBLE_ID', .7, 'document-shape',
                                     'Payment-card-shaped candidate with Luhn checksum; not proof of issuance'))
     for match in _MRZ.finditer(text):
-        value = match.group(1)
-        if value.count('<') >= 2 and sum(c.isalnum() for c in value) >= 8:
+        value = match.group(1).replace(' ', '').replace('«','<<').replace('»','<<')
+        if (30 <= len(value) <= 44 and value.count('<') >= 2
+                and sum(c.isalnum() for c in value) >= 8):
             findings.append(Finding(*match.span(1), 'POSSIBLE_ID', .7, 'document-shape',
                                     'Machine-readable identity line candidate; cover entire line'))
     for pattern, entity in _PATTERNS:

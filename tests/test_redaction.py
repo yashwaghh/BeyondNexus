@@ -181,6 +181,13 @@ class ExportBridgeTests(unittest.TestCase):
             self.request('/v1/redact-export', payload, token='wrong')
         self.assertEqual(error.exception.code, 401)
 
+    def test_unauthorized_large_body_is_discarded_without_scanning(self):
+        with patch('privacygate.web.review_upload') as scan:
+            with self.assertRaises(HTTPError) as error:
+                self.request('/v1/scan-file', {'data_base64':'A'*262144}, token='wrong')
+            self.assertEqual(error.exception.code,401)
+            scan.assert_not_called()
+
     def test_changed_upload_tampered_expired_and_missing_tickets_rejected(self):
         payload = self.scan()
         variants = [dict(payload, export_ticket=''), dict(payload, export_ticket='0.bad'),

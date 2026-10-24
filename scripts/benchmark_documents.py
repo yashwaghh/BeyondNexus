@@ -54,8 +54,28 @@ def main():
                 false_positives = len(findings) if not targets else 0
                 failures += missed + false_positives
                 rows.append(dict(document=name, format=kind, fields=len(targets),
+                                 field_coverage=[dict(entity=entity,ink_coverage=value)
+                                                 for (entity,_),value in zip(targets,values)],
                                  missed_or_partial=missed, min_ink_coverage=min(values,default=1),
                                  benign_false_positives=false_positives))
+                if missed:
+                    # Character classes/geometry only: diagnose recognition without
+                    # emitting words, values or repaired transcripts.
+                    recognized = engine.recognize(scanned)
+                    diagnostics = []
+                    width,height = recognized.width,recognized.height
+                    for (_, (l,t,r,b)),value in zip(targets,values):
+                        if value >= .98:
+                            continue
+                        words = [w for w in recognized.words if w['left']/width < r/1400 and
+                                 w['right']/width > l/1400 and w['top']/height < b/850 and w['bottom']/height > t/850]
+                        classes = []
+                        for w in words:
+                            word = recognized.text[w['start']:w['end']]
+                            classes.append(''.join('d' if c.isdecimal() else 'A' if c.isupper() else
+                                                   'a' if c.islower() else c for c in word))
+                        diagnostics.append(classes)
+                    rows[-1]['missed_field_character_classes'] = diagnostics
     except OCRError:
         print(json.dumps(dict(status='BLOCKED_UNVERIFIED', reason='Native Tesseract unavailable or failed')))
         return 2

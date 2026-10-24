@@ -54,6 +54,9 @@ class DocumentFieldTests(unittest.TestCase):
         self.assertEqual(len(findings),2)
         self.assertTrue(all(f.entity == 'POSSIBLE_ID' for f in findings))
         self.assertEqual(detect_document_fields('0000000000000000\n4111111111111112'),[])
+        self.assertEqual(detect_document_fields('Fullname: Demo Sample')[0].entity,'PERSON')
+        spaced = 'P<ZZZDEMO<<SAMPLE <<<<<<<<<<<<<<<<<<<<<<<<<<<'
+        self.assertEqual(detect_document_fields(spaced)[0].entity,'POSSIBLE_ID')
 
     def test_multiple_sensitive_fields_inline_are_conservatively_covered(self):
         text = 'Name: Demo Sample DOB: 01/02/1990'
