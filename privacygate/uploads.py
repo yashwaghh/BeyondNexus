@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import base64
 import math
+import threading
 from dataclasses import asdict, dataclass, field
 import warnings
 
@@ -15,6 +16,9 @@ from .detectors import detect_rules
 from .model import GemmaLocalClient, LocalModelError, VisionFinding
 from .pipeline import HIGH_THRESHOLD, sanitize
 from .ocr import TesseractOCR, OCRError
+
+# PDFium forbids concurrent calls, even for different documents.
+_PDFIUM_LOCK = threading.RLock()
 
 MAX_UPLOAD_BYTES = 6 * 1024 * 1024
 MAX_PDF_PAGES = 5
@@ -117,8 +121,9 @@ def _pdf_text_pages(data: bytes) -> tuple[list[str], list[dict], list[str]]:
         raise UploadReviewError('Invalid or unsupported PDF structure.') from None
 
 
-def _render_pdf_pages(data: bytes) -> list[bytes]:
+def _render_pdf_unlocked(data: bytes, with_sizes: bool):
     rendered: list[bytes] = []
+    sizes: list[tuple[float, float]] = []
     try:
         document = pdfium.PdfDocument(data)
         try:
@@ -131,6 +136,7 @@ def _render_pdf_pages(data: bytes) -> list[bytes]:
                     width, height = page.get_size()
                     if not all(math.isfinite(value) and value > 0 for value in (width, height)):
                         raise UploadReviewError('Invalid PDF page dimensions.')
+                    sizes.append((width, height))
                     # Bound native raster allocation before rendering, rather than after it.
                     scale = min(2, MAX_RENDER_EDGE / max(width, height))
                     bitmap = page.render(scale=scale)
@@ -149,7 +155,12 @@ def _render_pdf_pages(data: bytes) -> list[bytes]:
         raise
     except Exception:
         raise UploadReviewError('PDF pages could not be rendered safely.') from None
-    return rendered
+    return (rendered, sizes) if with_sizes else rendered
+
+
+def _render_pdf_pages(data: bytes, *, with_sizes: bool = False):
+    with _PDFIUM_LOCK:
+        return _render_pdf_unlocked(data, with_sizes)
 
 
 def _vision_metadata(finding: VisionFinding, page: int) -> dict:

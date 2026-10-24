@@ -114,6 +114,8 @@ globalThis.PrivacyGatePreview = (() => {
     const buttons = [];
     let regions = body.findings.filter(f => f.page && validBox(f.region_0_1000))
       .map(f => ({page: f.page, box: [...f.region_0_1000]}));
+    const history = [];
+    const undo = document.createElement('button'); undo.type = 'button'; undo.className = 'undo-mask'; undo.textContent = 'Undo last mask edit';
     let url = null, request = null, editVersion = 0;
     const enabled = body.status !== 'BLOCKED_UNVERIFIED' && typeof body.export_ticket === 'string';
     function revoke() {
@@ -123,6 +125,8 @@ globalThis.PrivacyGatePreview = (() => {
     }
     cleanups.set(root, revoke);
     function update() {
+      undo.disabled = !history.length;
+      if (regions.length > 500) message.textContent = 'Too many masks (maximum 500). Use Mask whole page to replace that page\'s masks, or remove excess masks.';
       for (const button of buttons) button.disabled = !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
     }
     function draw() {
@@ -140,12 +144,22 @@ globalThis.PrivacyGatePreview = (() => {
         }
       }
     }
+    function commit(next) {
+      revoke();
+      history.push(regions.map(r => ({page:r.page, box:[...r.box]})));
+      if (history.length > 20) history.shift();
+      regions = next; listMasks(); draw(); update();
+    }
+    undo.addEventListener('click', () => {
+      if (!history.length) return;
+      revoke(); regions = history.pop(); listMasks(); draw(); update();
+    });
     function listMasks() {
       list.replaceChildren();
       regions.forEach((region, index) => {
         const row = document.createElement('li'); row.textContent = `Mask ${index+1} / page ${region.page} `;
         const remove = document.createElement('button'); remove.textContent = 'Remove'; remove.type = 'button';
-        remove.addEventListener('click', () => { revoke(); regions.splice(index,1); listMasks(); draw(); });
+        remove.addEventListener('click', () => commit(regions.filter((_, i) => i !== index)));
         row.append(remove); list.append(row);
       });
     }
@@ -153,49 +167,51 @@ globalThis.PrivacyGatePreview = (() => {
       const fullPage = document.createElement('button'); fullPage.type = 'button'; fullPage.className = 'mask-page';
       fullPage.textContent = 'Mask whole page';
       fullPage.addEventListener('click', () => {
-        revoke();
-        if (regions.length < 500) { regions.push({page, box:[0,0,1000,1000]}); listMasks(); draw(); }
+        commit([...regions.filter(r => r.page !== page), {page, box:[0,0,1000,1000]}]);
       });
       figure.append(fullPage);
       canvas.style.touchAction = 'none'; canvas.style.cursor = 'crosshair';
-      let start = null;
+      let start = null, pointerId = null;
       const point = event => {
         const rect = canvas.getBoundingClientRect();
         return [Math.max(0,Math.min(1000,Math.round((event.clientY-rect.top)/rect.height*1000))),
                 Math.max(0,Math.min(1000,Math.round((event.clientX-rect.left)/rect.width*1000)))];
       };
       canvas.addEventListener('pointerdown', event => {
-        if (event.button !== 0) return;
-        revoke(); start = point(event); canvas.setPointerCapture(event.pointerId);
+        if (event.button !== 0 || start) return;
+        pointerId = event.pointerId; revoke(); start = point(event); canvas.setPointerCapture(event.pointerId);
       });
       canvas.addEventListener('pointermove', event => {
-        if (!start) return;
+        if (!start || event.pointerId !== pointerId) return;
         draw(); const end = point(event), ctx = canvas.getContext('2d');
         ctx.strokeStyle = '#c21f30'; ctx.lineWidth = Math.max(2,canvas.width/350);
         ctx.strokeRect(start[1]*canvas.width/1000, start[0]*canvas.height/1000,
                        (end[1]-start[1])*canvas.width/1000,(end[0]-start[0])*canvas.height/1000);
       });
       canvas.addEventListener('pointerup', event => {
-        if (!start) return;
+        if (!start || event.pointerId !== pointerId) return;
         const end = point(event), box = [Math.min(start[0],end[0]),Math.min(start[1],end[1]),Math.max(start[0],end[0]),Math.max(start[1],end[1])];
-        start = null;
-        if (validBox(box) && regions.length < 500) { regions.push({page,box}); listMasks(); draw(); }
+        start = null; pointerId = null;
+        if (validBox(box) && regions.length < 500) commit([...regions, {page,box}]);
+        else draw();
       });
-      canvas.addEventListener('pointercancel', () => { start = null; draw(); });
+      canvas.addEventListener('pointercancel', () => { start = null; pointerId = null; revoke(); draw(); });
     }
     toggle.addEventListener('change', () => { revoke(); draw(); });
     approval.addEventListener('change', () => { if (!approval.checked) revoke(); update(); });
-    panel.append(heading, help, toggleLabel, approvalLabel, list);
+    panel.append(heading, help, toggleLabel, approvalLabel, undo, list);
     for (const format of pages.length === 1 ? ['png','pdf'] : ['pdf']) {
       const button = document.createElement('button'); button.type = 'button'; button.className = `export-${format}`;
       button.textContent = `Prepare redacted ${format.toUpperCase()}`; buttons.push(button);
       button.addEventListener('click', async () => {
-        if (!enabled || !approval.checked || !toggle.checked || request) return;
+        if (!enabled || !approval.checked || !toggle.checked || regions.length > 500 || request) return;
+        if (url) URL.revokeObjectURL(url); url = null; downloads.replaceChildren();
         const edit = editVersion; request = new AbortController(); const current = request;
         const timer = setTimeout(() => current.abort(), 60000); update(); message.textContent = 'Building a new file locally...';
         try {
           const blob = await exportFile({regions, output_format:format, reviewed:true}, current.signal);
           if (versions.get(root) !== version || editVersion !== edit) return;
+          if (!blob.size || blob.type !== (format === 'png' ? 'image/png' : 'application/pdf')) throw new Error('Invalid export response; no download created.');
           if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
           const link = document.createElement('a'); link.href = url; link.className = 'redacted-download';
           link.download = `privacygate-redacted.${format}`; link.textContent = `Download redacted ${format.toUpperCase()}`;

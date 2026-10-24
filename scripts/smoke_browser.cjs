@@ -151,12 +151,27 @@ async function startServer(origin, port = 0) {
     const redactedFile = await redactedReceived;
     assert.equal(redactedFile.suggestedFilename(), 'privacygate-redacted.png');
     await redactedFile.saveAs(path.join(root,'reports/redacted-example.png')); await redactedFile.delete();
+    await panel.locator('.masked-toggle').uncheck(); await panel.locator('.masked-toggle').check();
+    await panel.locator('.export-reviewed').check();
+    await panel.route('**/v1/redact-export', route => route.fulfill({status:200,contentType:'application/json',body:'{}'}));
+    await panel.locator('.export-png').click();
+    await panel.getByText('Invalid export response; no download created.').waitFor();
+    assert.equal(await panel.locator('.redacted-download').count(),0);
+    await panel.unroute('**/v1/redact-export');
+    await panel.locator('.mask-list button').first().click();
+    await panel.locator('.undo-mask').click();
+    assert.equal(await panel.locator('.mask-list li').count(),1);
+    assert.equal(await panel.locator('.export-reviewed').isChecked(),false);
     await panel.locator('.mask-list button').first().click();
     assert.equal(await panel.locator('.export-reviewed').isChecked(), false);
     assert.equal(await panel.locator('.redacted-download').count(), 0);
     const bounds = await panel.locator('canvas').boundingBox();
     await panel.mouse.move(bounds.x+bounds.width*.1,bounds.y+bounds.height*.5);
-    await panel.mouse.down(); await panel.mouse.move(bounds.x+bounds.width*.85,bounds.y+bounds.height*.65); await panel.mouse.up();
+    await panel.mouse.down();
+    // Approval acquired during a drag must still be revoked when the new mask commits.
+    await panel.evaluate(() => { const box=document.querySelector('.export-reviewed'); box.checked=true; box.dispatchEvent(new Event('change')); });
+    await panel.mouse.move(bounds.x+bounds.width*.85,bounds.y+bounds.height*.65); await panel.mouse.up();
+    assert.equal(await panel.locator('.export-reviewed').isChecked(),false);
     assert.equal(await panel.locator('.mask-list li').count(), 1);
     assert.equal(await panel.locator('.export-png').isDisabled(), true);
     await panel.locator('.export-reviewed').check();
@@ -164,7 +179,7 @@ async function startServer(origin, port = 0) {
     await panel.screenshot({path:path.join(root,'reports/redaction-editor.png'),fullPage:true});
     await panel.locator('.mask-page').click();
     assert.equal(await panel.locator('.export-reviewed').isChecked(), false);
-    assert.equal(await panel.locator('.mask-list li').count(), 2);
+    assert.equal(await panel.locator('.mask-list li').count(), 1);
     await panel.locator('#source').fill('changed input');
     assert.equal(await panel.locator('.redacted-download').count(),0);
     console.log('PASS: edited masks, destructive PNG pixels, approved PDF export and stale-download invalidation.');
@@ -181,6 +196,20 @@ async function startServer(origin, port = 0) {
     const received = ui.waitForEvent('download'); await ui.locator('.preview-download').click();
     const file = await received;
     assert.ok(file.suggestedFilename().includes('NOT-REDACTED')); await file.delete();
+    // Cancel a delayed local-UI scan and reject its late completion.
+    let started, release;
+    const began=new Promise(resolve => {started=resolve;});
+    const held=new Promise(resolve => {release=resolve;});
+    await ui.route('**/v1/scan', async route => { started(); await held; try { await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'READY_FOR_MANUAL_APPROVAL',sanitized_text:'late result',findings:[],warnings:[]})}); } catch {} });
+    await ui.locator('#source').fill('synthetic text'); await ui.locator('#mode').selectOption('off');
+    await ui.locator('#scan').click(); await began;
+    assert.equal(await ui.locator('#scan-file').isDisabled(),true);
+    await ui.locator('#cancel').click(); release();
+    await ui.unroute('**/v1/scan');
+    assert.equal(await ui.locator('#result').inputValue(),'');
+    assert.equal(await ui.locator('#scan-file').isDisabled(),false);
+    assert.equal(await ui.locator('#copy').isDisabled(),true);
+    console.log('PASS: local UI cancellation, mutually exclusive scans, undo, drag-approval reset and invalid export rejection.');
     const fixture = spawnSync(process.env.PYTHON || 'python', ['-c',
       "import runpy,base64; m=runpy.run_path('tests/test_uploads.py'); print(base64.b64encode(m['make_pdf'](2)).decode())"], {cwd: root, encoding: 'utf8'});
     assert.equal(fixture.status, 0);

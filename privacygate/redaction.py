@@ -5,7 +5,6 @@ import io
 import math
 
 from PIL import Image, ImageDraw
-import pypdfium2 as pdfium
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
 
@@ -17,22 +16,11 @@ def redact_export(data: bytes, media_type: str, regions: list, output_format: st
                   *, reviewed: bool) -> tuple[bytes, str]:
     if reviewed is not True or not data or len(data) > MAX_UPLOAD_BYTES:
         raise UploadReviewError('Review and bounded source upload required.')
-    if output_format not in {'png', 'pdf'} or not isinstance(regions, list) or len(regions) > 500:
+    if not isinstance(output_format, str) or output_format not in {'png', 'pdf'} or not isinstance(regions, list) or len(regions) > 500:
         raise UploadReviewError('Invalid redaction export options.')
     if media_type == 'application/pdf':
         _pdf_text_pages(data)  # Same structure/page/encryption limits as inspection.
-        pages = _render_pdf_pages(data)
-        document = pdfium.PdfDocument(data)
-        try:
-            sizes = []
-            for index in range(len(document)):
-                page = document[index]
-                try:
-                    sizes.append(page.get_size())
-                finally:
-                    page.close()
-        finally:
-            document.close()
+        pages, sizes = _render_pdf_pages(data, with_sizes=True)
     elif media_type in SUPPORTED_IMAGE_TYPES:
         pages = [_normalized_png(data)]
         sizes = None

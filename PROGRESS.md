@@ -209,3 +209,14 @@
 - 2026-10-24T19:41:08+00:00 | Validation agent | PASS | files=46/46, tests=75; live text/vision model and external integrations unverified.
 
 - Final export gate: validator PASS (46/46 required files, 75 Python tests); 13 extension tests PASS; installed-extension browser rerun PASS, including whole-page masking and approved PNG/PDF export. One initial aggregate validator invocation reported test failure without identifiers; direct suite, three captured stability runs and subsequent validators all passed. Validator now prints failing test identifiers only to make any recurrence diagnosable without logging payloads. No cause reproduced. Final package refreshed; native target-Mac/live-site checks remain pending.
+
+### 2026-10-25 IST - Refinement and comprehensive regression pass
+- Found and fixed: unhashable export format values causing connection failure, non-ASCII auth-header comparison failure, concurrent native PDFium operations, redundant export PDF parse, and mask-commit approval race.
+- Added undo (20 edits), whole-page mask replacement, export MIME/nonempty checks, local UI scan cancellation/timeouts/mutual exclusion and stale-response protection. Extension version 0.4.1.
+- Regression cases added for malformed API requests, PDF locking, rotated/cropped PDF alignment, JPEG EXIF mask alignment, bridge-restart ticket invalidation, undo, mid-drag approval, bad export responses and overlapping/cancelled scans.
+- Inspected public CI: release 14fb186 and OCR adb6fda both completed success. Release jobs: macOS arm64 Python 3.10 and 3.13, each passing native Tesseract clean-fixture benchmark; Ubuntu installed-extension browser smoke success. No live target-Mac Gemma inference in these jobs.
+- Build checks: pip check PASS; wheel builds successfully; CLI/UI/Mac preflight help commands work. Final regression counts and fresh CI result to follow.
+
+- 2026-10-24T19:52:45+00:00 | Validation agent | PASS | files=46/46, tests=81; live text/vision model and external integrations unverified.
+
+- Final local results: 81 Python tests PASS, 14 extension tests PASS, installed Edge browser regression PASS (synthetic OCR/model/site fixtures). pip check and wheel build PASS; extracted wheel imports outside repository, contains shared editor assets and successfully exports a masked PNG. Updated editor screenshot inspected. Source diff whitespace check clean. Fresh code CI verification follows push.

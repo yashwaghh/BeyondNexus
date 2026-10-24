@@ -14,6 +14,7 @@ from privacygate.ocr import OCRPage
 from privacygate.redaction import redact_export
 from privacygate.uploads import UploadReviewError
 from privacygate.web import create_server
+from privacygate.uploads import _render_pdf_pages
 from test_uploads import make_text_pdf, make_metadata_pdf, make_pdf, FakeVision
 
 
@@ -85,6 +86,62 @@ class RedactionTests(unittest.TestCase):
                 redact_export(source_png(), 'image/png', [], 'png', reviewed=reviewed)
         with self.assertRaises(UploadReviewError):
             redact_export(make_pdf(2), 'application/pdf', [], 'png', reviewed=True)
+        for output_format in [[], {}, None, True, 'jpeg']:
+            with self.assertRaises(UploadReviewError):
+                redact_export(source_png(), 'image/png', [], output_format, reviewed=True)
+
+    def test_rotated_cropped_pdf_preview_and_export_align(self):
+        from pypdf.generic import RectangleObject
+        original, _ = redact_export(source_png(), 'image/png', [], 'pdf', reviewed=True)
+        writer = PdfWriter(io.BytesIO(original))
+        writer.pages[0].rotate(90)
+        writer.pages[0].cropbox = RectangleObject([10, 10, 90, 70])
+        buffer = io.BytesIO(); writer.write(buffer)
+        source = buffer.getvalue()
+        exported, _ = redact_export(source, 'application/pdf',
+                                    [{'page': 1, 'box': [250, 250, 750, 750]}], 'pdf', reviewed=True)
+        before = Image.open(io.BytesIO(_render_pdf_pages(source)[0]))
+        after = Image.open(io.BytesIO(_render_pdf_pages(exported)[0]))
+        self.assertEqual(before.size, after.size)
+        self.assertEqual(before.getpixel((0, 0)), after.getpixel((0, 0)))
+        self.assertEqual(after.getpixel((after.width//2, after.height//2)), (0, 0, 0))
+
+    def test_jpeg_exif_orientation_masks_normalized_pixels(self):
+        image = Image.new('RGB', (100, 80), 'red')
+        exif = Image.Exif(); exif[274] = 6
+        source = io.BytesIO(); image.save(source, format='JPEG', exif=exif)
+        exported, _ = redact_export(source.getvalue(), 'image/jpeg',
+                                    [{'page': 1, 'box': [0, 0, 500, 1000]}], 'png', reviewed=True)
+        with Image.open(io.BytesIO(exported)) as result:
+            self.assertEqual(result.size, (80, 100))
+            self.assertEqual(result.getpixel((40, 20)), (0, 0, 0))
+            self.assertGreater(result.getpixel((40, 80))[0], 240)
+            self.assertFalse(result.getexif())
+
+    def test_pdfium_entry_points_are_serialized_across_threads(self):
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+        active = 0
+        maximum = 0
+        guard = threading.Lock()
+        barrier = threading.Barrier(2)
+        def native(_data, with_sizes):
+            nonlocal active, maximum
+            with guard:
+                active += 1; maximum = max(maximum, active)
+            time.sleep(.03)
+            with guard:
+                active -= 1
+            return ([b'page'], [(100, 100)]) if with_sizes else [b'page']
+        def render(with_sizes):
+            barrier.wait(timeout=2)
+            return _render_pdf_pages(b'synthetic', with_sizes=with_sizes)
+        with patch('privacygate.uploads._render_pdf_unlocked', side_effect=native):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first, second = pool.submit(render, False), pool.submit(render, True)
+                self.assertEqual(first.result(), [b'page'])
+                self.assertEqual(second.result(), ([b'page'], [(100, 100)]))
+        self.assertEqual(maximum, 1)
 
 
 class ExportBridgeTests(unittest.TestCase):
@@ -148,6 +205,28 @@ class ExportBridgeTests(unittest.TestCase):
         with patch('privacygate.web.time.time', return_value=future):
             with self.assertRaises(HTTPError) as error:
                 self.request('/v1/redact-export', payload)
+        self.assertEqual(error.exception.code, 400)
+
+    def test_malformed_options_return_400_and_server_remains_usable(self):
+        payload = self.scan()
+        for output_format in [[], {}, None, True, 'jpeg']:
+            with self.assertRaises(HTTPError) as error:
+                self.request('/v1/redact-export', dict(payload, output_format=output_format))
+            self.assertEqual(error.exception.code, 400)
+        with self.request('/v1/redact-export', payload) as response:
+            self.assertEqual(response.status, 200)
+
+    def test_non_ascii_auth_header_is_rejected_without_connection_crash(self):
+        with self.assertRaises(HTTPError) as error:
+            self.request('/v1/redact-export', {}, token='\u00e9')
+        self.assertEqual(error.exception.code, 401)
+
+    def test_bridge_restart_invalidates_previous_export_ticket(self):
+        import secrets
+        payload = self.scan()
+        self.server.export_secret = secrets.token_bytes(32)
+        with self.assertRaises(HTTPError) as error:
+            self.request('/v1/redact-export', payload)
         self.assertEqual(error.exception.code, 400)
 
 

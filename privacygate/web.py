@@ -87,7 +87,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         supplied = self.headers.get("Authorization", "")
         expected = f"Bearer {self.server.token}"
-        return secrets.compare_digest(supplied, expected)
+        return secrets.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8"))
 
     def do_OPTIONS(self) -> None:
         if urlparse(self.path).path not in {"/v1/scan", "/v1/scan-file", "/v1/redact-export"} or not (origin := self._allowed_origin()):

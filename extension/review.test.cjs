@@ -68,6 +68,22 @@ test('cancelled review rejects its late response and keeps insertion blocked', a
   p.node('#reviewed').checked = true; await p.fire('#copy');
   assert.equal(p.copies(), 0);
 });
+
+test('late cancelled scan cannot re-enable controls during a newer review', async () => {
+  const resolves = [];
+  const p = panel(() => new Promise(resolve => resolves.push(resolve)));
+  const first = p.fire('#scan');
+  await new Promise(resolve => setImmediate(resolve));
+  await p.fire('#source', 'input');
+  const second = p.fire('#scan');
+  await new Promise(resolve => setImmediate(resolve));
+  resolves[0](reply('READY_FOR_MANUAL_APPROVAL')); await first;
+  assert.equal(p.node('#scan').disabled, true);
+  assert.equal(p.node('#output').hidden, true);
+  resolves[1](reply('REVIEW_REQUIRED')); await second;
+  assert.equal(p.node('#scan').disabled, false);
+  assert.equal(p.node('#output').hidden, false);
+});
 test('failed rescan removes old approval', async () => {
   let fail = false;
   const p = panel(async () => { if (fail) throw new Error(); return reply('REVIEW_REQUIRED'); });

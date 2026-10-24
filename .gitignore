@@ -13,3 +13,6 @@ private_samples/
 reports/
 dist/
 node_modules/
+
+# Local Python wheel staging
+build/
