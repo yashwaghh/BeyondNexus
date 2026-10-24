@@ -4,7 +4,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = ('manifest.json', 'service_worker.js', 'popup.html', 'popup.js',
-         'popup.css', 'composer.js', 'preview.js', 'options.html', 'options.js', 'README.md')
+         'popup.css', 'composer.js', 'attachment.js', 'preview.js', 'options.html', 'options.js', 'README.md')
 
 if __name__ == '__main__':
     # Keep the unpacked extension's shared renderer in sync with the Python UI.

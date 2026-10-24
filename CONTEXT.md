@@ -85,3 +85,6 @@ Local OCR + rules + Gemma vision with detection/localization benchmarks. OCR is 
 
 ## Reviewed export decision (2026-10-25)
 ADR-015: user authorized extension improvements, redaction and export. Use destructive raster masks and fresh lossless image-only PDFs, preserving rendered page dimensions and excluding all source PDF objects. Explicit masked-preview approval and a completed file-bound scan ticket gate local downloads; no automatic attachment/send. This supersedes the historical no-export restriction in ADR-010 for the new workflow. See REDACTION_EXPORT.md.
+
+## Explicit extension file integration (2026-10-25)
+ADR-016: user explicitly authorized an Attach button for reviewed redacted exports. Transfer only newly generated PNG/PDF bytes on an explicit click, bound to the active ChatGPT tab and exact review-time conversation URL. Never submit a message. Missing/ambiguous file pickers fail to manual download. This supersedes earlier no-attachment restrictions for this user-invoked action only. See extension/README.md v0.5.0.

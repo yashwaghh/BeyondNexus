@@ -134,3 +134,6 @@ Uploads now require local Tesseract as well as Gemma vision. On Mac, install wit
 
 ## Reviewed redaction and export
 The extension (v0.4.0) and local UI now let you draw/remove masks, inspect a blacked-out preview and explicitly download a redacted PNG or rebuilt image-only PDF. See [REDACTION_EXPORT.md](REDACTION_EXPORT.md) for usage and limits. Restart the bridge and reload the extension after updating. Masked pixels are removed, but missed information outside the masks can remain.
+
+## Extension integration v0.5.0
+The side panel now checks its bridge connection and can explicitly attach a prepared reviewed redacted PNG/PDF to the exact ChatGPT conversation used for file review. Preparing an export never uploads it, and the extension never clicks Send. See [extension setup and attachment workflow](extension/README.md#explicit-reviewed-attachment-v050). Reload the extension and restart the bridge after pulling. Authenticated ChatGPT upload acceptance still needs a manual synthetic test.

@@ -52,6 +52,8 @@ async function startServer(origin, port = 0) {
     await panel.locator('#test').click();
     await panel.waitForFunction(() => document.querySelector('#message').textContent.startsWith('Connected:'));
     await panel.goto(`chrome-extension://${id}/popup.html`);
+    await panel.locator('#check-bridge').click();
+    await panel.waitForFunction(() => document.querySelector('#connection-status').textContent.startsWith('Connected:'));
     await panel.locator('#source').fill('Email demo@example.org');
     await panel.locator('#mode').selectOption('off');
     await panel.locator('#scan').click();
@@ -165,6 +167,7 @@ async function startServer(origin, port = 0) {
     await panel.locator('.mask-list button').first().click();
     assert.equal(await panel.locator('.export-reviewed').isChecked(), false);
     assert.equal(await panel.locator('.redacted-download').count(), 0);
+    await panel.locator('canvas').scrollIntoViewIfNeeded();
     const bounds = await panel.locator('canvas').boundingBox();
     await panel.mouse.move(bounds.x+bounds.width*.1,bounds.y+bounds.height*.5);
     await panel.mouse.down();
@@ -183,6 +186,60 @@ async function startServer(origin, port = 0) {
     await panel.locator('#source').fill('changed input');
     assert.equal(await panel.locator('.redacted-download').count(),0);
     console.log('PASS: edited masks, destructive PNG pixels, approved PDF export and stale-download invalidation.');
+
+    // Explicit attachment controller: keep ChatGPT as the active tab, as with a real side panel.
+    await chat.evaluate(() => {
+      window.uploaded=[];
+      const input=document.createElement('input'); input.type='file'; input.accept='image/png,application/pdf'; input.id='synthetic-picker';
+      input.addEventListener('change',async () => {
+        const file=input.files[0];
+        window.uploaded.push({name:file.name,type:file.type,bytes:[...new Uint8Array(await file.arrayBuffer())]}); input.value='';
+      }); document.body.append(input);
+    });
+    await chat.bringToFront();
+    await panel.evaluate(base64 => {
+      const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+      const transfer=new DataTransfer();transfer.items.add(new File([bytes],'synthetic.png',{type:'image/png'}));
+      const upload=document.querySelector('#upload');upload.files=transfer.files;upload.dispatchEvent(new Event('change'));
+      document.querySelector('#scan-file').click();
+    },image);
+    await panel.locator('.masked-toggle').waitFor();
+    await panel.evaluate(() => {
+      for (const selector of ['.masked-toggle','.export-reviewed']) {
+        const node=document.querySelector(selector);node.checked=true;node.dispatchEvent(new Event('change'));
+      }
+      document.querySelector('.export-png').click();
+    });
+    await panel.locator('.redacted-download').waitFor();
+    assert.equal(await chat.evaluate(()=>window.uploaded.length),0,'Preparing export must not upload');
+    const expectedBytes=await panel.evaluate(async()=>[...new Uint8Array(await (await fetch(document.querySelector('.redacted-download').href)).arrayBuffer())]);
+    await panel.evaluate(()=>document.querySelector('.attach-redacted').click());
+    await chat.waitForFunction(()=>window.uploaded.length===1);
+    await panel.waitForFunction(()=>document.querySelector('.redaction-tools').textContent.includes('Redacted file handed'));
+    const assigned=await chat.evaluate(()=>window.uploaded[0]);
+    assert.equal(assigned.name,'privacygate-redacted.png');assert.equal(assigned.type,'image/png');
+    assert.deepEqual(assigned.bytes,expectedBytes);assert.notDeepEqual(assigned.bytes,[...Buffer.from(image,'base64')]);
+    assert.equal(await chat.evaluate(()=>window.sent),0);
+    assert.equal(await panel.locator('.attach-redacted').isDisabled(),true);
+    await panel.evaluate(()=>document.querySelector('.export-pdf').click());
+    await panel.waitForFunction(()=>document.querySelector('.redacted-download')?.download.endsWith('.pdf'));
+    const expectedPDF=await panel.evaluate(async()=>[...new Uint8Array(await (await fetch(document.querySelector('.redacted-download').href)).arrayBuffer())]);
+    await panel.evaluate(()=>document.querySelector('.attach-redacted').click());
+    await chat.waitForFunction(()=>window.uploaded.length===2);
+    const assignedPDF=await chat.evaluate(()=>window.uploaded[1]);
+    assert.equal(assignedPDF.name,'privacygate-redacted.pdf');assert.equal(assignedPDF.type,'application/pdf');
+    assert.deepEqual(assignedPDF.bytes,expectedPDF);assert.equal(Buffer.from(assignedPDF.bytes).subarray(0,5).toString(),'%PDF-');
+    assert.equal(await chat.evaluate(()=>window.sent),0);
+    await chat.evaluate(()=>{const input=document.createElement('input');input.type='file';input.accept='application/pdf';input.id='ambiguous-picker';document.body.append(input);});
+    await panel.evaluate(()=>document.querySelector('.export-pdf').click());
+    await panel.waitForFunction(()=>document.querySelector('.redacted-download')?.download.endsWith('.pdf'));
+    await panel.evaluate(()=>document.querySelector('.attach-redacted').click());
+    await panel.getByText('A unique compatible file picker was not found. Download and attach manually.').waitFor();
+    assert.equal(await chat.evaluate(()=>window.uploaded.length),2);
+    await chat.evaluate(()=>history.pushState({},'', '/c/changed-attachment-target'));
+    await panel.waitForFunction(()=>!document.querySelector('.redacted-download'));
+    assert.equal(await chat.evaluate(()=>window.uploaded.length),2);
+    console.log('PASS: explicit PNG/PDF attachment transfers exact generated redacted bytes; duplicate pickers and changed conversations block; no auto-upload or Send.');
 
     const ui = await context.newPage(); await ui.goto(server.address);
     ui.on('pageerror', error => errors.push(error.message));

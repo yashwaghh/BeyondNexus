@@ -95,9 +95,10 @@ globalThis.PrivacyGatePreview = (() => {
       }
     }
     if (versions.get(root) === version && rendered.length === pages.length && options.exportFile)
-      setupEditor(root, body, rendered, options.exportFile, version);
+      setupEditor(root, body, rendered, options, version);
   }
-  function setupEditor(root, body, pages, exportFile, version) {
+  function setupEditor(root, body, pages, options, version) {
+    const {exportFile, attachFile} = options;
     const panel = document.createElement('section'); panel.className = 'redaction-tools';
     const heading = document.createElement('h3'); heading.textContent = 'Redact and export';
     const help = document.createElement('p');
@@ -116,16 +117,19 @@ globalThis.PrivacyGatePreview = (() => {
       .map(f => ({page: f.page, box: [...f.region_0_1000]}));
     const history = [];
     const undo = document.createElement('button'); undo.type = 'button'; undo.className = 'undo-mask'; undo.textContent = 'Undo last mask edit';
-    let url = null, request = null, editVersion = 0;
+    let url = null, request = null, editVersion = 0, prepared = null, attached = false;
+    const attach = document.createElement('button'); attach.type = 'button'; attach.className = 'attach-redacted';
+    attach.textContent = 'Attach redacted copy to ChatGPT (uploads file)';
     const enabled = body.status !== 'BLOCKED_UNVERIFIED' && typeof body.export_ticket === 'string';
     function revoke() {
-      editVersion++; approval.checked = false; request?.abort(); request = null;
+      editVersion++; approval.checked = false; prepared = null; attached = false; request?.abort(); request = null;
       if (url) URL.revokeObjectURL(url); url = null; downloads.replaceChildren(); message.textContent = "";
       update();
     }
     cleanups.set(root, revoke);
     function update() {
       undo.disabled = !history.length;
+      attach.disabled = !prepared || attached || !enabled || !approval.checked || !toggle.checked || Boolean(request);
       if (regions.length > 500) message.textContent = 'Too many masks (maximum 500). Use Mask whole page to replace that page\'s masks, or remove excess masks.';
       for (const button of buttons) button.disabled = !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
     }
@@ -205,13 +209,14 @@ globalThis.PrivacyGatePreview = (() => {
       button.textContent = `Prepare redacted ${format.toUpperCase()}`; buttons.push(button);
       button.addEventListener('click', async () => {
         if (!enabled || !approval.checked || !toggle.checked || regions.length > 500 || request) return;
-        if (url) URL.revokeObjectURL(url); url = null; downloads.replaceChildren();
+        if (url) URL.revokeObjectURL(url); url = null; prepared = null; attached = false; downloads.replaceChildren();
         const edit = editVersion; request = new AbortController(); const current = request;
         const timer = setTimeout(() => current.abort(), 60000); update(); message.textContent = 'Building a new file locally...';
         try {
           const blob = await exportFile({regions, output_format:format, reviewed:true}, current.signal);
           if (versions.get(root) !== version || editVersion !== edit) return;
           if (!blob.size || blob.type !== (format === 'png' ? 'image/png' : 'application/pdf')) throw new Error('Invalid export response; no download created.');
+          prepared = {blob, format};
           if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
           const link = document.createElement('a'); link.href = url; link.className = 'redacted-download';
           link.download = `privacygate-redacted.${format}`; link.textContent = `Download redacted ${format.toUpperCase()}`;
@@ -221,6 +226,26 @@ globalThis.PrivacyGatePreview = (() => {
         } finally { clearTimeout(timer); if (request === current) { request = null; update(); } }
       });
       panel.append(button);
+    }
+    if (typeof attachFile === 'function') {
+      const sharing = document.createElement('p');
+      sharing.textContent = 'Attach uploads the generated redacted copy to the connected ChatGPT conversation. It never clicks Send. Check the website for upload completion before sending.';
+      attach.addEventListener('click', async () => {
+        if (attach.disabled || !prepared || request) return;
+        const file = prepared, edit = editVersion;
+        request = new AbortController(); const current = request;
+        const timer = setTimeout(() => current.abort(),15000); update();
+        message.textContent = 'Handing the reviewed redacted copy to ChatGPT...';
+        try {
+          await attachFile(file.blob, file.format, current.signal);
+          if (versions.get(root) !== version || editVersion !== edit) return;
+          attached = true;
+          message.textContent = 'Redacted file handed to the ChatGPT picker. Verify the attachment and upload completion there. Send was not clicked.';
+        } catch (error) {
+          if (versions.get(root) === version && editVersion === edit) message.textContent = error.message || 'Attachment failed. Download and attach manually.';
+        } finally { clearTimeout(timer); if (request === current) { request = null; update(); } }
+      });
+      panel.append(sharing, attach);
     }
     if (!enabled) message.textContent = 'Export blocked: complete OCR and vision review first, then rescan. Export authorization expires after 15 minutes.';
     panel.append(message,downloads); root.append(panel); listMasks(); update();

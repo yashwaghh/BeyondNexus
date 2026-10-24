@@ -4,6 +4,12 @@
 <body>
   <header><div><span>LOCAL REVIEW</span><h1>PrivacyGate</h1></div><button id="settings" class="icon" title="Settings">⚙</button></header>
   <p class="caution">Draft here before sharing with ChatGPT. This tool can miss personal information. Inserting text exposes it to the website; you click Send yourself.</p>
+  <section class="connection-panel">
+    <strong>Local bridge connection</strong>
+    <p id="connection-status" role="status">Save the bridge token in Settings, then check the connection.</p>
+    <button id="check-bridge">Check local bridge</button>
+    <details><summary>Bridge startup command</summary><pre id="setup-command"></pre></details>
+  </section>
   <button id="target">Connect current ChatGPT tab</button><p id="target-label">No target connected. Click the toolbar icon on your ChatGPT tab first.</p>
   <label for="source">Text to review</label>
   <textarea id="source" maxlength="50000" placeholder="Write your private draft here. It stays in this panel until local review."></textarea>
@@ -14,7 +20,7 @@
     <label for="upload">Image or small PDF · 6 MB / 5 pages</label>
     <input id="upload" type="file" accept="image/png,image/jpeg,image/webp,application/pdf">
     <button id="scan-file">Review file &amp; show boxes</button>
-    <p>Review, edit masks and export locally. Attach a downloaded copy yourself after inspecting it.</p>
+    <p>Review, edit masks and export locally. Prepare a redacted copy, then explicitly attach it to ChatGPT or download it.</p>
   </section>
   <section id="output" hidden>
     <div class="status-row"><strong id="result-title">Sanitized draft</strong><span id="status"></span></div>
@@ -28,6 +34,6 @@
   <p id="message" role="status"></p>
   <section id="document-preview" aria-live="polite"></section>
   <button id="clear">Clear private draft</button>
-  <script src="preview.js"></script><script src="composer.js"></script><script src="popup.js"></script>
+  <script src="preview.js"></script><script src="composer.js"></script><script src="attachment.js"></script><script src="popup.js"></script>
 </body>
 </html>

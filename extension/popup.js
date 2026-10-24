@@ -1,7 +1,28 @@
 const $ = selector => document.querySelector(selector);
 const BRIDGE = 'http://127.0.0.1:8765';
-let latest = null, target = null, revision = 0, controller = null;
+let latest = null, target = null, fileTarget = null, revision = 0, controller = null;
 const allowed = () => Boolean(latest && latest.export_available !== false && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED');
+$('#setup-command').textContent = `python -m privacygate.web --extension-origin chrome-extension://${chrome.runtime.id}`;
+$('#check-bridge').addEventListener('click', async () => {
+  const button = $('#check-bridge'); button.disabled = true;
+  const request = new AbortController(); const timer = setTimeout(() => request.abort(), 8000);
+  $('#connection-status').textContent = 'Checking local authentication...';
+  try {
+    const config = await chrome.storage.local.get({bridgeToken:''});
+    if (!config.bridgeToken) throw new Error('Open Settings and save the current bridge token first.');
+    const response = await fetch(`${BRIDGE}/v1/scan`, {
+      method:'POST', signal:request.signal,
+      headers:{Authorization:`Bearer ${config.bridgeToken}`, 'Content-Type':'application/json'},
+      body:JSON.stringify({text:'PrivacyGate synthetic connection check.',mode:'off'})
+    });
+    if (!response.ok) throw new Error(bridgeError(response.status));
+    const result = await response.json();
+    if (result.status !== 'READY_FOR_MANUAL_APPROVAL' || !Array.isArray(result.findings)) throw new Error('Unexpected bridge response. Restart the current bridge version.');
+    $('#connection-status').textContent = 'Connected: token and extension origin accepted. Text review is available; uploads also require local OCR and Gemma.';
+  } catch (error) {
+    $('#connection-status').textContent = error.name === 'AbortError' ? 'Bridge check timed out. Start the bridge using the command below.' : (error.message || 'Cannot reach local bridge. Start it using the command below.');
+  } finally { clearTimeout(timer); button.disabled = false; }
+});
 $('#cancel').addEventListener('click', () => { resetApproval(); setMessage('Review cancelled. A running local model request may finish on the bridge.'); });
 $('#settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('#source').addEventListener('input', resetApproval);
@@ -10,7 +31,7 @@ $('#reviewed').addEventListener('change', updateActions);
 $('#upload').addEventListener('change', resetApproval);
 chrome.tabs.onActivated.addListener(() => disconnect());
 chrome.tabs.onUpdated.addListener((id, change) => {
-  if (target?.id === id && (change.url || change.status === 'loading')) disconnect();
+  if ((target?.id === id || fileTarget?.id === id) && (change.url || change.status === 'loading')) disconnect();
 });
 chrome.storage.onChanged.addListener(() => resetApproval());
 
@@ -106,6 +127,9 @@ $('#scan-file').addEventListener('click', async () => {
   try {
     const config = await chrome.storage.local.get({bridgeToken: ''});
     if (!config.bridgeToken) throw new Error('Save the bridge token in Settings first.');
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+    const attachmentTarget = tab?.url && new URL(tab.url).origin === 'https://chatgpt.com' ? {id:tab.id,url:tab.url} : null;
+    fileTarget = attachmentTarget;
     const data = await new Promise((resolve, reject) => {
       const reader = new FileReader(); reader.onerror = () => reject(new Error('Cannot read file locally.'));
       reader.onload = () => resolve(String(reader.result).split(',', 2)[1]); reader.readAsDataURL(file);
@@ -122,11 +146,11 @@ $('#scan-file').addEventListener('click', async () => {
     if (version !== revision) return;
     $('#draft-actions').hidden = true; $('#result').hidden = true; $('#result-title').textContent = 'File review';
     $('#output').hidden = false; $('#status').textContent = body.status.replaceAll('_', ' ');
-    $('#result').value = 'Review and edit masks below to export a redacted file. Nothing is attached to ChatGPT.';
+    $('#result').value = 'Review and edit masks below to export a redacted file. An attachment is uploaded only when you explicitly click Attach.';
     $('#summary').textContent = `${body.findings.length} finding(s). Inspect the numbered boxes below.`;
     $('#warnings').textContent = body.warnings.join(' ');
     // Never set latest: file results cannot authorize text insertion or copying.
-    await PrivacyGatePreview.render($('#document-preview'), body, {exportFile: async (edits, signal) => {
+    await PrivacyGatePreview.render($('#document-preview'), body, {attachFile:(blob,format,signal) => attachRedacted(blob,format,signal,attachmentTarget), exportFile: async (edits, signal) => {
       const response = await fetch(`${BRIDGE}/v1/redact-export`, {
         method:'POST', signal,
         headers:{Authorization:`Bearer ${config.bridgeToken}`, 'Content-Type':'application/json'},
@@ -173,7 +197,7 @@ $('#clear').addEventListener('click', () => {
   $('#upload').value = '';
 });
 function resetApproval() {
-  revision++; controller?.abort();
+  revision++; controller?.abort(); fileTarget = null;
   latest = null; $('#output').hidden = true; $('#result').value = '';
   $('#draft-actions').hidden = false; $('#result').hidden = false; $('#result-title').textContent = 'Sanitized draft';
   $('#summary').textContent = ''; $('#warnings').textContent = '';
@@ -183,3 +207,28 @@ function resetApproval() {
 function updateActions() { $('#copy').disabled = !allowed(); $('#insert').disabled = !(allowed() && target); }
 function setMessage(text, error = false) { $('#message').textContent = text; $('#message').style.color = error ? '#a43131' : '#617068'; }
 resetApproval();
+
+async function attachRedacted(blob, format, signal, intended) {
+  if (!intended) throw new Error('Start file review while the intended ChatGPT conversation is active, then prepare the export again.');
+  if (!blob.size || blob.size > 10*1024*1024 || blob.type !== (format === 'png' ? 'image/png' : 'application/pdf'))
+    throw new Error('Attachment exceeds the local 10 MB limit or has an invalid type. Download and attach manually.');
+  async function verifyTarget() {
+    if (signal.aborted) throw new Error('Attachment cancelled.');
+    const [active] = await chrome.tabs.query({active:true,currentWindow:true});
+    const tab = await chrome.tabs.get(intended.id);
+    if (active?.id !== intended.id || tab.url !== intended.url) throw new Error('ChatGPT tab or conversation changed. Review the file again in the intended tab.');
+    if (signal.aborted) throw new Error('Attachment cancelled.');
+  }
+  await verifyTarget();
+  const [{result: picker}] = await chrome.scripting.executeScript({target:{tabId:intended.id},func:chatgptAttachment,
+    args:['inspect',intended.url,{type:blob.type}]});
+  if (!picker?.ready) throw new Error(picker?.error || 'Attachment picker unavailable. Download and attach manually.');
+  const data = await new Promise((resolve,reject) => {
+    const reader = new FileReader(); reader.onerror=() => reject(new Error('Cannot read generated export.'));
+    reader.onload=() => resolve(String(reader.result).split(',',2)[1]); reader.readAsDataURL(blob);
+  });
+  await verifyTarget();
+  const [{result}] = await chrome.scripting.executeScript({target:{tabId:intended.id},func:chatgptAttachment,
+    args:['attach',intended.url,{type:blob.type,base64:data,fingerprint:picker.fingerprint}]});
+  if (!result?.assigned) throw new Error(result?.error || 'Attachment could not be assigned. Download and attach manually.');
+}

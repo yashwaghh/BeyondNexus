@@ -37,3 +37,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; background:var(--line); padd
 .mask-list li { margin:5px 0; }
 .mask-list button { padding:4px 8px; }
 .redacted-download { display:block; color:#086044; font-weight:bold; padding:10px 0; }
+
+.connection-panel { border:1px solid #cbd7d0; border-radius:10px; padding:12px; margin:14px 0; }
+.connection-panel p { font-size:12px; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; background:#edf4ef; padding:8px; }

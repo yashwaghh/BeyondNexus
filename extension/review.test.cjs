@@ -164,3 +164,61 @@ test('shared visual renderer rejects invalid boxes', () => {
     assert.equal(preview.validBox(value), false);
   assert.equal(source('preview.js'), fs.readFileSync(path.join(__dirname, '../privacygate/ui/preview.js'), 'utf8'));
 });
+
+function attachmentScenario({origin='https://chatgpt.com',url='https://chatgpt.com/',count=1,accept='image/png,application/pdf',existing=false} = {}) {
+  const events=[];
+  const inputs=Array.from({length:count}, () => ({id:'upload',accept,multiple:true,disabled:false,
+    files:existing ? [{}] : [], getAttribute(){return null;}, dispatchEvent(event){events.push(event.type);}}));
+  const editor={getClientRects:()=>[1],closest:()=>null};
+  class SyntheticFile { constructor(parts,name,{type}){this.name=name;this.type=type;this.size=parts[0].length;} }
+  class Transfer { constructor(){this.files=[];this.items={add:file=>this.files.push(file)};} }
+  const context=vm.createContext({location:{origin,href:url},document:{querySelectorAll:selector=>selector==='#prompt-textarea'?[editor]:inputs},
+    File:SyntheticFile,DataTransfer:Transfer,Uint8Array,atob,Event:class {constructor(type){this.type=type;}}});
+  vm.runInContext(source('attachment.js'),context);
+  return {inputs,events,call:(action,expected,payload)=>context.chatgptAttachment(action,expected,payload)};
+}
+const syntheticPNG=Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64');
+test('attachment hands only explicit generated file to picker and never dispatches submit',()=>{
+  const page=attachmentScenario();
+  const picker=page.call('inspect','https://chatgpt.com/',{type:'image/png'});
+  const result=page.call('attach','https://chatgpt.com/',{type:'image/png',base64:syntheticPNG,fingerprint:picker.fingerprint});
+  assert.equal(result.assigned,true);assert.equal(page.inputs[0].files[0].name,'privacygate-redacted.png');
+  assert.deepEqual(page.events,['input','change']);
+});
+test('attachment rejects wrong origin, changed conversation, ambiguous picker and unsupported files',()=>{
+  for (const setup of [{origin:'https://example.com'},{url:'https://chatgpt.com/c/changed'},{count:2},{accept:'.txt'}]) {
+    const page=attachmentScenario(setup);
+    assert.ok(page.call('inspect','https://chatgpt.com/',{type:'image/png'}).error);
+    assert.equal(page.events.length,0);
+  }
+});
+test('attachment rejects source signature, changed picker fingerprint and existing selection',()=>{
+  for (const variant of ['signature','fingerprint','existing']) {
+    const page=attachmentScenario({existing:variant==='existing'});
+    const picker=page.call('inspect','https://chatgpt.com/',{type:'image/png'});
+    const result=page.call('attach','https://chatgpt.com/',{type:'image/png',base64:variant==='signature'?btoa('private original'):syntheticPNG,
+      fingerprint:variant==='fingerprint'?'changed':picker.fingerprint});
+    assert.ok(result.error);assert.equal(page.events.length,0);
+  }
+});
+
+test('bridge check uses synthetic text instead of the private draft', async()=>{
+  let payload;
+  const p=panel(async (_url, request)=>{payload=JSON.parse(request.body);return reply('READY_FOR_MANUAL_APPROVAL');});
+  p.node('#source').value='private draft stays here';await p.fire('#check-bridge');
+  assert.equal(payload.text,'PrivacyGate synthetic connection check.');assert.equal(payload.mode,'off');
+  assert.ok(p.node('#connection-status').textContent.startsWith('Connected:'));
+});
+test('bridge check reports rejected token and restores its button', async()=>{
+  const p=panel(async()=>({ok:false,status:401}));await p.fire('#check-bridge');
+  assert.ok(p.node('#connection-status').textContent.includes('Token rejected'));
+  assert.equal(p.node('#check-bridge').disabled,false);
+});
+
+test('attachment prefers a unique image-specific picker over a general file picker',()=>{
+  const page=attachmentScenario({count:2});page.inputs[0].accept='image/*';page.inputs[1].accept='';
+  const picker=page.call('inspect','https://chatgpt.com/',{type:'image/png'});
+  assert.equal(picker.ready,true);assert.ok(picker.fingerprint.includes('image/*'));
+  const result=page.call('attach','https://chatgpt.com/',{type:'image/png',base64:syntheticPNG,fingerprint:picker.fingerprint});
+  assert.equal(result.assigned,true);assert.equal(page.inputs[0].files.length,1);assert.equal(page.inputs[1].files.length,0);
+});
