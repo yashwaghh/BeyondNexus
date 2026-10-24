@@ -44,6 +44,7 @@ _PATTERNS = [(_pattern(label), entity) for label, entity in _LABELS]
 _ALL_LABEL = re.compile(r'^(?:' + '|'.join(label for label, _ in _LABELS) + r')[ \t]*(?::|#|=)', re.I)
 _CARD_SHAPE = re.compile(r'(?<!\w)(?:[0-9][ -]?){12,18}[0-9](?!\w)')
 _MRZ = re.compile(r'^[ \t]*([A-Z0-9<«» ][A-Z0-9<«» ]{28,78}[A-Z0-9<«»])[ \t]*$', re.M)
+_NOISY_MRZ = re.compile(r'^[ \t]*([A-Z][<«][^\n]{28,78})[ \t]*$', re.M)
 
 
 def _luhn_valid(digits):
@@ -61,10 +62,14 @@ def detect_document_fields(text: str) -> list[Finding]:
         if _luhn_valid(digits):
             findings.append(Finding(*match.span(), 'POSSIBLE_ID', .7, 'document-shape',
                                     'Payment-card-shaped candidate with Luhn checksum; not proof of issuance'))
-    for match in _MRZ.finditer(text):
+    for match in list(_MRZ.finditer(text)) + list(_NOISY_MRZ.finditer(text)):
         value = match.group(1).replace(' ', '').replace('«','<<').replace('»','<<')
-        if (30 <= len(value) <= 44 and value.count('<') >= 2
-                and sum(c.isalnum() for c in value) >= 8):
+        strict = 30 <= len(value) <= 44 and value.count('<') >= 2
+        # OCR commonly turns trailing filler chevrons into letters/punctuation.
+        # A machine-readable header plus name delimiter still warrants a full-line mask.
+        noisy = (30 <= len(value) <= 80 and value[:2] in {'P<','I<','V<','A<','C<'}
+                 and '<<' in value[:24])
+        if (strict or noisy) and sum(c.isalnum() for c in value) >= 8:
             findings.append(Finding(*match.span(1), 'POSSIBLE_ID', .7, 'document-shape',
                                     'Machine-readable identity line candidate; cover entire line'))
     for pattern, entity in _PATTERNS:
