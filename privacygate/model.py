@@ -81,7 +81,12 @@ class GemmaLocalClient:
     @staticmethod
     def _completion_json(response: dict) -> dict:
         try:
-            content = response['choices'][0]['message']['content']
+            choice = response['choices'][0]
+            if not isinstance(choice, dict):
+                raise ValueError('Invalid completion envelope')
+            if choice.get('finish_reason') == 'length':
+                raise ValueError('Truncated completion must not be repaired or cleared')
+            content = choice['message']['content']
             if not isinstance(content, str):
                 raise ValueError('Nontext completion')
             cleaned = content.strip()
@@ -162,6 +167,8 @@ class GemmaLocalClient:
             'including names, addresses, faces tied to identity, phone numbers, email, Indian PAN/Aadhaar, bank '
             'details, signatures, QR/barcodes containing personal data, document numbers, and other identifying '
             'details. Return JSON only as {"entities":[{"entity_type":"PERSON","box_2d":[y1,x1,y2,x2]}]}. '
+            'Distinguish a 12-digit Aadhaar identifier (often three groups of four digits) from a phone number. '
+            'Do not label an identity number as PHONE merely because it contains digits. '
             'Coordinates use integers from 0 to 1000. Use null when no reliable region is possible. Valid types: '
             'PERSON, ADDRESS, PHONE, EMAIL, PAN, AADHAAR, BANK_ACCOUNT, OTHER_PII. Do not repeat or transcribe '
             'the sensitive value. Use {"entities":[]} if none are visible.'

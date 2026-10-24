@@ -9,10 +9,10 @@ workflow surface, not as the primary privacy boundary.
 ## Why the extension comes first
 
 PrivacyGate's job is to inspect text *before* it is shared with a cloud AI. A
-user-invoked browser extension can hold draft text in its own popup, send it
+user-invoked browser extension can hold draft text in its own side panel, send it
 only to `127.0.0.1`, and insert the sanitized draft after explicit approval.
-Chrome's `activeTab` permission grants temporary access after a user gesture,
-and `scripting` supports targeted injection without `all_urls` access. Manifest
+The current extension declares access only to ChatGPT and the loopback bridge;
+`scripting` runs targeted injection on explicit actions without `all_urls` access. Manifest
 V3 also forbids remotely hosted extension code.
 
 A ChatGPT plugin is useful for reusable instructions, tools, and connected
@@ -27,11 +27,15 @@ replace—the pre-entry browser workflow.
 
 - `privacygate/web.py`: loopback-only UI and authenticated `POST /v1/scan`.
 - `privacygate/ui/`: local browser workbench with review-before-copy.
-- `extension/`: unpacked MV3 side panel using `activeTab`, `scripting`,
+- `extension/`: unpacked MV3 side panel using `scripting`,
   `storage`, `sidePanel`, `clipboardWrite`, and the exact loopback host permission.
   ChatGPT insertion is user-invoked, target-checked and never submits.
-- No automatic submit, request interception, file scanning, cloud model call,
+  Scoped access to `https://chatgpt.com/*` is declared alongside the loopback
+  host. Capture/insertion remain explicit actions; no background page collection.
+- No automatic submit, request interception, cloud model call,
   telemetry, remote code, or broad host permission.
+- File inspection and numbered previews are available in the side panel; file
+  attachment transfer and secure redaction remain disabled.
 
 ## Not yet claimed
 

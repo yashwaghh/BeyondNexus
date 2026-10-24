@@ -1,5 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"><title>PrivacyGate settings</title></head>
 <body><h1>PrivacyGate bridge</h1><p class="caution">Keep this token private. It authorizes local scan requests.</p>
+<p>Start the local server from your repository using:</p><pre id="command"></pre>
 <label>Bridge URL<input id="url" value="http://127.0.0.1:8765"></label>
 <label>Bridge token<input id="token" type="password" autocomplete="off"></label>
-<button id="save" class="primary">Save locally</button><p id="message"></p><script src="options.js"></script></body></html>
+<button id="save" class="primary">Save locally</button><button id="test">Test local connection</button><p id="message" role="status"></p><script src="options.js"></script></body></html>

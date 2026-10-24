@@ -12,3 +12,4 @@ __pycache__/
 private_samples/
 reports/
 dist/
+node_modules/

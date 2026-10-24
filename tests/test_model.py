@@ -15,6 +15,23 @@ class MockGemma(GemmaLocalClient):
 
 
 class ModelTests(unittest.TestCase):
+    def test_invalid_completion_envelope_fails_closed(self):
+        for response in [{'choices': []}, {'choices': [None]}, {'choices': ['invalid']}]:
+            with self.assertRaises(LocalModelError):
+                GemmaLocalClient._completion_json(response)
+
+    def test_reported_truncation_is_not_repaired_or_cleared(self):
+        for content in ['{"entities":[]', '{"entities":[]}']:
+            with self.assertRaises(LocalModelError):
+                GemmaLocalClient._completion_json({'choices': [{
+                    'finish_reason': 'length', 'message': {'content': content}}]})
+
+    def test_stopped_fenced_output_with_missing_outer_brace_can_be_recovered(self):
+        response = {'choices': [{'finish_reason': 'stop', 'message': {
+            'content': '```json\n{"entities":[{"entity_type":"PERSON","box_2d":[10,20,100,200]}]\n```'}}]}
+        parsed = GemmaLocalClient._completion_json(response)
+        self.assertEqual(parsed['entities'][0]['entity_type'], 'PERSON')
+
     def test_exact_span_accepted(self):
         m = MockGemma('{"entities":[{"text":"Aarav Kulkarni","entity_type":"PERSON"}]}')
         rows = m.detect('My name is Aarav Kulkarni')

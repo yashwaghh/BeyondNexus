@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import io
-from dataclasses import asdict, dataclass
+import base64
+import math
+from dataclasses import asdict, dataclass, field
 import warnings
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -37,6 +39,7 @@ class UploadReviewResult:
     vision_succeeded: bool
     warnings: list[str]
     export_available: bool = False
+    preview_pages: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -121,7 +124,12 @@ def _render_pdf_pages(data: bytes) -> list[bytes]:
                 page = document[index]
                 bitmap = None
                 try:
-                    bitmap = page.render(scale=2)
+                    width, height = page.get_size()
+                    if not all(math.isfinite(value) and value > 0 for value in (width, height)):
+                        raise UploadReviewError('Invalid PDF page dimensions.')
+                    # Bound native raster allocation before rendering, rather than after it.
+                    scale = min(2, MAX_RENDER_EDGE / max(width, height))
+                    bitmap = page.render(scale=scale)
                     image = bitmap.to_pil().convert('RGB')
                     image.thumbnail((MAX_RENDER_EDGE, MAX_RENDER_EDGE), Image.Resampling.LANCZOS)
                     output = io.BytesIO()
@@ -153,7 +161,8 @@ def _vision_metadata(finding: VisionFinding, page: int) -> dict:
 
 
 def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
-                  model: GemmaLocalClient | None = None) -> UploadReviewResult:
+                  model: GemmaLocalClient | None = None,
+                  include_previews: bool = False) -> UploadReviewResult:
     if media_type not in SUPPORTED_UPLOAD_TYPES:
         raise UploadReviewError('Only PNG, JPEG, WebP, and PDF uploads are supported.')
     if vision_mode not in {'off', 'always'}:
@@ -232,4 +241,8 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
         vision_attempted=vision_attempted,
         vision_succeeded=vision_succeeded,
         warnings=warnings_out,
+        preview_pages=[{
+            'page': index,
+            'image_data_url': 'data:image/png;base64,' + base64.b64encode(png).decode('ascii'),
+        } for index, png in enumerate(rendered_pages, start=1)] if include_previews else [],
     )

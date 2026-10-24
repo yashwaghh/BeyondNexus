@@ -59,7 +59,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data: blob:")
         if cors_origin:
             self.send_header("Access-Control-Allow-Origin", cors_origin)
             self.send_header("Vary", "Origin")
@@ -104,6 +104,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+            "/preview.js": ("preview.js", "text/javascript; charset=utf-8"),
         }
         if path not in assets:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -155,13 +156,17 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
                     encoded = payload.get("data_base64")
                     media_type = payload.get("media_type")
                     vision_mode = payload.get("vision_mode", "always")
+                    include_previews = payload.get("include_previews", False)
+                    if not isinstance(include_previews, bool):
+                        raise ValueError
                     if not isinstance(encoded, str) or not isinstance(media_type, str) or not isinstance(vision_mode, str):
                         raise ValueError
                     try:
                         upload = base64.b64decode(encoded, validate=True)
                     except (binascii.Error, ValueError):
                         raise ValueError from None
-                    result = review_upload(upload, media_type, vision_mode=vision_mode, model=self.server.model)
+                    result = review_upload(upload, media_type, vision_mode=vision_mode,
+                                           model=self.server.model, include_previews=include_previews)
             finally:
                 self.server.scan_slots.release()
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, UploadReviewError):
@@ -196,6 +201,8 @@ def main() -> int:
                         help="Optional 24+ character token; otherwise a fresh token is generated")
     parser.add_argument("--no-model", action="store_true", help="Disable LM Studio for this server")
     parser.add_argument("--model", default=os.environ.get("PII_MODEL_ID", ""))
+    parser.add_argument("--model-timeout", type=float, default=120,
+                        help="Local model timeout per text/image/page request in seconds (default: 120)")
     args = parser.parse_args()
     token = args.token or secrets.token_urlsafe(32)
     model = None
@@ -205,7 +212,7 @@ def main() -> int:
         readiness = probe_local_gemma(probe)
         print(f"Gemma fallback preflight: {'READY' if readiness.ready else 'NOT READY'} — {readiness.message}")
         if readiness.ready:
-            model = GemmaLocalClient(endpoint, readiness.selected_model)
+            model = GemmaLocalClient(endpoint, readiness.selected_model, timeout_seconds=args.model_timeout)
     server = create_server(port=args.port, token=token,
                            extension_origin=args.extension_origin, model=model)
     print(f"PrivacyGate UI: {server.local_origin}")

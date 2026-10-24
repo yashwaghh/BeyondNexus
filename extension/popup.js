@@ -1,11 +1,12 @@
 const $ = selector => document.querySelector(selector);
 const BRIDGE = 'http://127.0.0.1:8765';
 let latest = null, target = null, revision = 0, controller = null;
-const allowed = () => Boolean(latest && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED');
+const allowed = () => Boolean(latest && latest.export_available !== false && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED');
 $('#settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('#source').addEventListener('input', resetApproval);
 $('#mode').addEventListener('change', resetApproval);
 $('#reviewed').addEventListener('change', updateActions);
+$('#upload').addEventListener('change', resetApproval);
 chrome.tabs.onActivated.addListener(() => disconnect());
 chrome.tabs.onUpdated.addListener((id, change) => {
   if (target?.id === id && (change.url || change.status === 'loading')) disconnect();
@@ -36,7 +37,7 @@ $('#target').addEventListener('click', async () => {
   try {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     if (!tab?.url || new URL(tab.url).origin !== 'https://chatgpt.com')
-      throw new Error('Open ChatGPT and click the PrivacyGate toolbar icon to grant access.');
+      throw new Error('Open https://chatgpt.com and reconnect. If access is disabled, allow this site in Chrome extension settings.');
     target = {id: tab.id, url: tab.url, text: ''};
     const result = await composer('read');
     target.text = result.text;
@@ -57,6 +58,7 @@ $('#scan').addEventListener('click', async () => {
   const text = $('#source').value, mode = $('#mode').value, version = revision;
   if (!text.trim()) return setMessage('Enter text first.', true);
   $('#scan').disabled = true;
+  $('#scan-file').disabled = true;
   const request = new AbortController(); controller = request;
   const timer = setTimeout(() => request.abort(), 180000);
   try {
@@ -70,7 +72,7 @@ $('#scan').addEventListener('click', async () => {
       body: JSON.stringify({text, mode})
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || 'Local scan rejected.');
+    if (!response.ok) throw new Error(bridgeError(response.status));
     if (revision !== version) return;
     if (!['READY_FOR_MANUAL_APPROVAL', 'REVIEW_REQUIRED', 'BLOCKED_UNVERIFIED'].includes(body.status)
         || typeof body.sanitized_text !== 'string' || !Array.isArray(body.findings)
@@ -86,12 +88,60 @@ $('#scan').addEventListener('click', async () => {
     setMessage(body.status === 'BLOCKED_UNVERIFIED' ? 'Verification incomplete. Copy and insertion blocked.' : 'Review the entire proposed draft before approving.');
   } catch (error) {
     if (revision === version) setMessage(error.name === 'AbortError'
-      ? 'Local scan timed out. Nothing was inserted.' : 'Scan failed. Check the local server, token and extension origin.', true);
+      ? 'Local scan timed out. Nothing was inserted.' : (error.message || 'Local connection failed. Check Settings.'), true);
   } finally {
     clearTimeout(timer);
-    if (controller === request) { controller = null; $('#scan').disabled = false; }
+    if (controller === request) { controller = null; $('#scan').disabled = false; $('#scan-file').disabled = false; }
   }
 });
+$('#scan-file').addEventListener('click', async () => {
+  resetApproval();
+  const version = revision, file = $('#upload').files[0];
+  if (!file) return setMessage('Choose an image or PDF first.', true);
+  if (file.size > 6 * 1024 * 1024) return setMessage('File exceeds 6 MB.', true);
+  const request = new AbortController(); controller = request;
+  $('#scan-file').disabled = true; $('#scan').disabled = true;
+  const timer = setTimeout(() => request.abort(), 660000);
+  try {
+    const config = await chrome.storage.local.get({bridgeToken: ''});
+    if (!config.bridgeToken) throw new Error('Save the bridge token in Settings first.');
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader(); reader.onerror = () => reject(new Error('Cannot read file locally.'));
+      reader.onload = () => resolve(String(reader.result).split(',', 2)[1]); reader.readAsDataURL(file);
+    });
+    if (version !== revision) return;
+    setMessage('Rendering and inspecting locally. Multi-page PDFs may take several minutes.');
+    const response = await fetch(`${BRIDGE}/v1/scan-file`, {
+      method: 'POST', signal: request.signal,
+      headers: {Authorization: `Bearer ${config.bridgeToken}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({data_base64: data, media_type: file.type, vision_mode: 'always', include_previews: true})
+    });
+    if (!response.ok) throw new Error(bridgeError(response.status));
+    const body = await response.json();
+    if (version !== revision) return;
+    $('#output').hidden = false; $('#status').textContent = body.status.replaceAll('_', ' ');
+    $('#result').value = 'File inspection only. No redacted file is produced and nothing is attached to ChatGPT.';
+    $('#summary').textContent = `${body.findings.length} finding(s). Inspect the numbered boxes below.`;
+    $('#warnings').textContent = body.warnings.join(' ');
+    // Never set latest: file results cannot authorize text insertion or copying.
+    await PrivacyGatePreview.render($('#document-preview'), body);
+    if (version === revision) setMessage(body.status === 'BLOCKED_UNVERIFIED'
+      ? 'Visual verification incomplete. Inspect the original; previews are not redaction.'
+      : 'Suspected information is highlighted. Labels and locations may be wrong; inspect every page.');
+  } catch (error) {
+    if (version === revision) setMessage(error.name === 'AbortError' ? 'File review timed out.' : error.message, true);
+  } finally {
+    clearTimeout(timer);
+    if (controller === request) { controller = null; $('#scan-file').disabled = false; $('#scan').disabled = false; }
+  }
+});
+function bridgeError(status) {
+  if (status === 401) return 'Token rejected. Save the current server token in Settings.';
+  if (status === 403) return 'Extension origin rejected. Restart the server using the command in Settings.';
+  if (status === 429) return 'Local scanner busy. Wait for the previous review to finish.';
+  if (status === 400) return 'Invalid file or request. Check format, 6 MB size and 5-page limit.';
+  return `Local scanner returned HTTP ${status}. Check the server.`;
+}
 $('#copy').addEventListener('click', async () => {
   if (!allowed()) return;
   try { await navigator.clipboard.writeText(latest.sanitized_text); setMessage('Reviewed draft copied.'); }
@@ -110,12 +160,14 @@ $('#insert').addEventListener('click', async () => {
 });
 $('#clear').addEventListener('click', () => {
   $('#source').value = ''; disconnect(); setMessage('Private draft and result cleared from this panel.');
+  $('#upload').value = '';
 });
 function resetApproval() {
   revision++; controller?.abort();
   latest = null; $('#output').hidden = true; $('#result').value = '';
   $('#summary').textContent = ''; $('#warnings').textContent = '';
   $('#reviewed').checked = false; $('#reviewed').disabled = true; updateActions();
+  PrivacyGatePreview.clear($('#document-preview'));
 }
 function updateActions() { $('#copy').disabled = !allowed(); $('#insert').disabled = !(allowed() && target); }
 function setMessage(text, error = false) { $('#message').textContent = text; $('#message').style.color = error ? '#a43131' : '#617068'; }

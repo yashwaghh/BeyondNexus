@@ -1,5 +1,34 @@
 # PrivacyGate — Local Validation Report (Live Gemma Text & Vision Verified)
 
+## Subsequent visual-review and extension validation (Windows)
+
+- Python regression suite: 53 tests PASS; includes opt-in preview pixel identity,
+  blocked-result previews, bounded large-page rendering and preview-flag validation.
+- Upstream JSON brace recovery was preserved with regression tests; explicitly
+  token-truncated completions and invalid envelopes fail closed.
+- Extension regression suite: 12 tests PASS, including approval invalidation,
+  stale responses, invalid boxes, unrelated-site connection and shared-renderer parity.
+- Installed extension tested in an isolated Edge/Chromium profile against the
+  actual authenticated Python bridge: settings connection, text scan, full
+  connect/review/approve/insert controller path on a synthetic ChatGPT page,
+  no Send, file review, box pixel alignment, unlocated findings, annotated PNG
+  download, two-page PDF previews, and a 320px layout passed.
+- Browser screenshots of synthetic fixtures were inspected locally. The model
+  was a synthetic test double; this does not measure Gemma localization quality.
+- The extension now declares narrowly scoped ChatGPT and loopback host access
+  at installation. Page access is still used only for explicit actions, with
+  no persistent content script or background collection. Reload the extension
+  after updating and accept/re-enable its changed site permissions.
+- Web model timeout is now configurable and defaults to 120s per request.
+- Annotated PNG output retains private visible pixels. It is not redacted.
+- Live unauthenticated ChatGPT verification was attempted separately but stopped
+  at Cloudflare's "Verify you are human" page (title: "Just a moment..."). No
+  editor was available and no challenge bypass was attempted. Live-site DOM and
+  actual toolbar/sidebar behavior remain manual acceptance gates; synthetic
+  browser integration success must not be presented as live-site certification.
+
+The target-Mac text and vision evidence below is retained separately.
+
 **Date:** 2026-10-24T22:50:00+05:30
 **Host Platform:** Apple M1, 8 GB unified memory, macOS Darwin 27.0.0 (arm64)
 **Python:** 3.13.11
@@ -12,7 +41,7 @@
 
 ## Executive Summary: ✅ PASS (Milestone Ready)
 
-The local Gemma fallback option is **verified, hardened, and fully operational** across both text and multimodal image/PDF review pipelines on this Apple Silicon Mac. All 46 unit tests pass, required files (31/31) are present, and live inference with `gemma4-e2b-instruct-pure` successfully detects both contextual exact spans (e.g. `PERSON`) and visual bounding boxes (`[y1, x1, y2, x2]`).
+Basic local text and multimodal integration passed the recorded synthetic smoke cases on this Apple Silicon Mac. At that checkpoint 46 unit tests passed and 31/31 required files were present. Live inference with `gemma4-e2b-instruct-pure` returned contextual exact spans and visual bounding boxes. This is integration evidence, not complete PII coverage: the synthetic image smoke reported PERSON only despite containing an email. Localization accuracy, recall and memory pressure remain unbenchmarked.
 
 ---
 

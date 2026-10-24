@@ -36,3 +36,11 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 .warnings p { margin:5px 0; }
 .approval { display:flex; gap:8px; color:var(--ink); margin:14px 0; }
 @media (max-width:760px) { .workspace { grid-template-columns:1fr; } header { flex-direction:column; } }
+.document-preview:empty { display:none; }
+.document-preview { margin-top:18px; }
+.preview-page { margin:20px 0; padding-top:12px; border-top:1px solid var(--line); }
+.preview-page canvas { display:block; width:100%; max-width:1000px; height:auto; margin:12px auto; border:1px solid var(--line); }
+.preview-page figcaption { font-weight:700; }
+.preview-download { display:inline-block; margin:8px 0; color:var(--green); }
+.controls { flex-wrap:wrap; }
+.controls select { max-width:100%; }

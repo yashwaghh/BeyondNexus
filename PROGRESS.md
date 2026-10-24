@@ -27,7 +27,7 @@
 - [x] Add authenticated `POST /v1/scan-file` and local file picker UI.
 - [x] Enforce 6 MB, 5-page, 20-megapixel, encryption, and fail-closed limits.
 - [x] Add a synthetic target-Mac image/PDF vision smoke script.
-- [ ] Run Gemma 4 E2B vision smoke on the target 8 GB Mac and record aggregate timing/labels.
+- [x] Run Gemma 4 E2B vision smoke on the target 8 GB Mac and record aggregate timing/labels (upstream `94708f8`).
 - [ ] Benchmark synthetic multilingual/rotated/handwritten/metadata/form samples.
 - [ ] Isolate PDF parsing/rendering in a resource-limited subprocess before public/untrusted use.
 - [ ] Design and independently verify secure image/PDF redaction before enabling file export.
@@ -149,3 +149,35 @@
 - Validator rerun: `python scripts/validate_iteration.py --record` PASS.
 - Deliverables: created `DEMO_GUIDE.md` containing interactive judge demonstration scenarios and preflight instructions.
 
+### 2026-10-24 IST — Visual review and browser integration — Numbered boxes and working local extension path
+- Goal: show where suspected upload PII appears, and exercise the extension in an actual browser rather than only mocks.
+- Files changed: opt-in previews in uploads/bridge, shared preview renderer in web UI and extension, extension settings/permissions/file controls, browser smoke fixtures, packaging, CI, and durable documentation.
+- Visual logic: return the exact normalized PNG pixels sent to the model only when authenticated callers request `include_previews: true`; map [top,left,bottom,right] / 1000 into canvas pixels; draw numbered boxes and matching plain-language labels on each page. Unlocated findings remain explicitly listed; no regions are fabricated. Clear stale previews/results on input changes. Per-page PNG download is labelled NOT REDACTED and retains original visible content; file results cannot authorize text insertion or attachment transfer.
+- Extension logic: declare narrowly scoped ChatGPT and loopback host permissions instead of relying on expired activeTab/optional permission state; still inject only on Connect/Capture/Insert clicks, with no persistent content script. Settings shows the exact extension-origin startup command and tests authentication; token/origin/busy failures have actionable messages. Side-panel image/PDF uploads use the same local endpoint and renderer.
+- Additional hardening: cap PDF raster scale before native allocation; web model timeout defaults to configurable 120s/page; prompt distinguishes 12-digit Aadhaar-shaped identifiers from phone numbers without asserting correctness.
+- Test commands + aggregate results: Python validator PASS (39/39 required files, 50 tests, rule benchmark and fail-closed CLI); Node unit suite 12 PASS. `node scripts/smoke_browser.cjs` PASS in isolated Edge/Chromium with actual unpacked extension and Python HTTP server: connection/token/origin, text scan and approval invalidation, full connect/scan/approve/insert controller path, isolated-world contenteditable insertion, no Send, file preview box pixel alignment, unlocated findings, actual annotated PNG download, two-page PDF previews, 320px layout, no JS page errors or unexpected test requests. Synthetic-model screenshots inspected locally.
+- Model/hardware verification: browser smoke uses a synthetic vision double and simulated ChatGPT page, not live Gemma. A separate `--live-site` attempt reached Cloudflare Verify-you-are-human (Just a moment...) with no editor; no challenge bypass attempted. Target-Mac vision accuracy/latency remains unbenchmarked; actual Chrome/ChatGPT toolbar/sidebar acceptance remains pending.
+- Tooling note: downloaded Chrome-for-Testing executable hit a Windows side-by-side launch error; installed Edge successfully ran the Chromium integration tests. CI now includes the deterministic browser smoke on Ubuntu with Playwright 1.62.1.
+- Next owner/action: pull/reload extension v0.3.0 and allow its scoped ChatGPT permission; use Settings' command and Test local connection, then test inside the normal authenticated ChatGPT browser with synthetic content. Run Mac live upload smoke and visually compare predicted boxes with real synthetic image/PDF content before expanding scope.
+
+
+- 2026-10-24T16:59:00+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:06:14+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:34:34+00:00 | Validation agent | PASS | files=31/31, tests=50; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:40:08+00:00 | Validation agent | PASS | files=39/39, tests=50; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:41:05+00:00 | Validation agent | PASS | files=39/39, tests=50; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:42:03+00:00 | Validation agent | PASS | files=39/39, tests=52; live text/vision model and external integrations unverified.
+
+### 2026-10-24 IST — Integration — Preserve concurrent Mac vision milestone
+- Pulled/rebased onto `94708f8` after push found concurrent upstream work. Preserved both handoffs, the demo guide, live Mac image/PDF timings and JSON brace-recovery fix.
+- Updated current context/checklist: basic Mac vision integration is now evidenced; broad recall/localization and five-page memory performance remain unbenchmarked. Synthetic image smoke returned PERSON but not its email, illustrating why smoke success is not complete detection.
+- Parser regression guard: never repair or accept completions reported as token-truncated (`finish_reason=length`), even if partial JSON can be balanced. Preserve recovery for stopped fenced output with a missing outer brace; malformed response envelopes fail closed.
+- Combined validation: 53 Python tests, 39 required files and 12 extension tests; deterministic installed-extension browser smoke passes with synthetic model/page fixtures. Live ChatGPT attempt remains blocked by Cloudflare rather than a witnessed editor failure.
+- Next action: visually check the updated boxes on the target Mac with synthetic documents and verify the reloaded v0.3.0 extension in the user's normal ChatGPT browser. No need to repeat initial model setup if the running configuration is unchanged.
+
+- 2026-10-24T17:42:45+00:00 | Validation agent | PASS | files=39/39, tests=53; live text/vision model and external integrations unverified.

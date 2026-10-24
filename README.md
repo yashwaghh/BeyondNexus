@@ -48,13 +48,13 @@ export PII_MODEL_ID=privacygate-gemma
 
 # Checks macOS, Apple Silicon, Python, loopback URL, loaded model identity,
 # and one synthetic exact-span inference without logging the prompt.
-privacygate-check-mac --smoke
+privacygate-check-mac --smoke --timeout 75
 ```
 
 If the package is not installed as an editable command, run the equivalent:
 
 ```bash
-python -m privacygate.macos_check --smoke
+python -m privacygate.macos_check --smoke --timeout 75
 ```
 
 The command exits nonzero if the host is not Apple Silicon macOS, LM Studio is
@@ -84,6 +84,12 @@ to 5 pages. It extracts and masks PDF text, flags metadata/attachment risks,
 renders every page locally, and asks the loaded Gemma 4 model for semantic
 vision findings and optional normalized regions.
 
+The local UI and extension now show numbered bounding boxes over each normalized
+image/PDF page, with plain-language findings and explicit location-unavailable
+items. Downloadable annotated PNGs are **NOT redacted** and still show private
+content. They are for local inspection, not automatic sharing. The web server
+uses a configurable 120-second per-model-request timeout (`--model-timeout`).
+
 This produces review guidance only. It does **not** create a redacted image or
 PDF, and a sanitized text extraction is not a sanitized document. See
 [`ITERATION_2.md`](ITERATION_2.md) for the contract, threat limits, and target-Mac
@@ -99,7 +105,7 @@ Manifest V3 prototype. Load it unpacked, configure its exact origin and local
 bridge token as described in [`extension/README.md`](extension/README.md), then
  use its side panel to draft privately or capture a ChatGPT draft. It can copy or insert only after an
 explicit review; it never submits the field. This is a browser extension—not a
-guaranteed ChatGPT interception mechanism.
+  guaranteed ChatGPT interception mechanism.
 
 With `--mode off`, regex is tested without Gemma; `--mode on-uncertain` calls only a loopback LM Studio server when candidate scores or contextual hints warrant it; `--mode always` invokes Gemma for any text up to the configured cap. All modes produce sanitized output but do **not** certify safety. Exit codes: `0` = ready for *manual* approval, `1` = review required, `2` = blocked/unverified, `3` = invalid input/configuration.
 

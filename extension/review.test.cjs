@@ -14,6 +14,7 @@ function panel(fetcher) {
   };
   const event = () => ({addListener(fn) { this.listener = fn; }});
   const chrome = {runtime: {openOptionsPage() {}},
+    permissions: {request: async () => true},
     tabs: {onActivated: event(), onUpdated: event(),
       query: async () => [{id: 1, url: 'https://chatgpt.com/'}],
       get: async () => ({id: 1, url: 'https://chatgpt.com/'})},
@@ -22,7 +23,7 @@ function panel(fetcher) {
   let copies = 0;
   const context = vm.createContext({document: {querySelector: node}, chrome,
     navigator: {clipboard: {writeText: async () => { copies++; }}},
-    fetch: fetcher, URL, AbortController, setTimeout, clearTimeout, chatgptComposer() {}});
+    fetch: fetcher, URL, AbortController, setTimeout, clearTimeout, chatgptComposer() {}, PrivacyGatePreview: {clear() {}}});
   vm.runInContext(source('popup.js'), context);
   node('#source').value = 'synthetic text'; node('#mode').value = 'off';
   return {node, chrome, copies: () => copies,
@@ -119,4 +120,19 @@ test('contenteditable rejection does not report success', () => {
   const p = richEditor(false);
   assert.ok(p.call('insert', 'original', 'reviewed draft').error);
   assert.equal(p.node.innerText, 'original');
+});
+test('connecting on an unrelated website leaves insertion disconnected', async () => {
+  const p = panel(async () => reply('REVIEW_REQUIRED'));
+  p.chrome.tabs.query = async () => [{id: 1, url: 'https://example.org/'}];
+  await p.fire('#target'); await p.fire('#scan'); p.node('#reviewed').checked = true;
+  await p.fire('#reviewed', 'change');
+  assert.equal(p.node('#insert').disabled, true);
+});
+test('shared visual renderer rejects invalid boxes', () => {
+  const context = vm.createContext({}); vm.runInContext(source('preview.js'), context);
+  const preview = context.PrivacyGatePreview;
+  assert.equal(preview.validBox([100, 200, 400, 800]), true);
+  for (const value of [null, [1, 2, 3], [-1, 0, 300, 400], [400, 200, 100, 800], [1, 2, 3, 1001]])
+    assert.equal(preview.validBox(value), false);
+  assert.equal(source('preview.js'), fs.readFileSync(path.join(__dirname, '../privacygate/ui/preview.js'), 'utf8'));
 });

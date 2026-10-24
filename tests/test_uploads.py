@@ -1,4 +1,5 @@
 import io
+import base64
 import unittest
 
 from PIL import Image
@@ -65,6 +66,28 @@ class BrokenVision:
 
 
 class UploadReviewTests(unittest.TestCase):
+    def test_preview_is_opt_in_and_uses_exact_model_pixels(self):
+        model = FakeVision()
+        self.assertEqual(review_upload(make_png(), 'image/png', model=model).preview_pages, [])
+        result = review_upload(make_png(), 'image/png', model=model, include_previews=True)
+        preview = result.preview_pages[0]
+        self.assertEqual(preview['page'], 1)
+        self.assertEqual(base64.b64decode(preview['image_data_url'].split(',')[1]), model.last_bytes)
+        self.assertFalse(result.export_available)
+
+    def test_blocked_scan_still_returns_original_preview_for_manual_review(self):
+        result = review_upload(make_pdf(2), 'application/pdf', model=BrokenVision(), include_previews=True)
+        self.assertEqual(result.status, 'BLOCKED_UNVERIFIED')
+        self.assertEqual([page['page'] for page in result.preview_pages], [1, 2])
+
+    def test_extremely_large_pdf_page_is_bounded_before_rasterizing(self):
+        writer = PdfWriter(); writer.add_blank_page(width=100000, height=50000)
+        output = io.BytesIO(); writer.write(output)
+        model = FakeVision()
+        review_upload(output.getvalue(), 'application/pdf', model=model)
+        with Image.open(io.BytesIO(model.last_bytes)) as image:
+            self.assertLessEqual(max(image.size), 2200)
+
     def test_image_is_normalized_and_flagged_for_review(self):
         model = FakeVision()
         result = review_upload(make_png(), 'image/png', model=model)

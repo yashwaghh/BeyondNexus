@@ -22,6 +22,9 @@ REQUIRED = [
     'tests/test_detectors.py', 'tests/test_pipeline.py', 'tests/test_readiness.py',
     'tests/test_uploads.py', 'tests/test_web.py',
     'scripts/smoke_local_uploads.py',
+    'privacygate/ui/preview.js', 'extension/preview.js', 'extension/composer.js',
+    'extension/service_worker.js', 'extension/review.test.cjs',
+    'scripts/package_extension.py', 'scripts/smoke_browser.cjs', 'tests/browser_fixture.py',
 ]
 
 

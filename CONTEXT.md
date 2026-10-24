@@ -27,6 +27,8 @@ Protect users **before** they share text/documents with cloud AI tools. Optimize
 | ADR-010 | Iteration-two upload review produces no redacted file | Model regions and PDF overlays are not secure deletion | After verified object-level redaction design |
 | ADR-011 | Use Pillow, pypdf and pypdfium2 for bounded local parsing/rendering | Cross-platform wheels and permissive PDFium bindings; avoids hosted conversion | Revisit after parser isolation/security audit |
 | ADR-012 | Use extension-owned side-panel composition for ChatGPT pre-entry review | In-chat skills cannot establish a pre-submission boundary; website drafts may already be visible to the site | After live browser acceptance and packaging review |
+| ADR-013 | Provide opt-in private page previews with numbered boxes and annotated PNG download | Users need to inspect model locations; annotation never constitutes redaction | After secure export design and localization benchmark |
+| ADR-014 | Declare scoped ChatGPT host access; inject only on explicit user actions | Avoids expired activeTab and optional-permission setup failures for the extension's sole supported site; no all_urls or background capture | After live-site browser acceptance and permission review |
 
 ## Current implementation
 
@@ -72,8 +74,8 @@ V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED
 
 ## Open questions needing evidence
 
-- Actual Gemma E2B JSON compliance and latency on user Mac? **Unverified**.
+- Basic Gemma E2B text smoke passed on M1 8 GB (22-53s); general JSON compliance and detection accuracy remain unbenchmarked.
 - Is a regex-only policy acceptable for certain identifiers? Needs test set.
 - Chrome MV3 is the selected first target; supported-site evidence and store/distribution approach remain open.
 - What Hindi/Marathi detection accuracy can we demonstrate? Not established.
-- What Gemma 4 E2B vision accuracy/latency can the 8 GB Mac sustain across 1-5 rendered pages? Unverified.
+- Mac synthetic image/PDF vision smoke passed (30.23s image, 37.77s one-page PDF), including regions. Recall, localization quality, memory pressure and 1-5-page latency remain unbenchmarked.

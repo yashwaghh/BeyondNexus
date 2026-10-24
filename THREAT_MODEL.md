@@ -33,6 +33,7 @@
 15. **Incomplete PDF view:** rendered pixels can omit hidden layers, prior revisions, attachment contents, JavaScript, metadata or stale form values. Structural warnings and no-export policy keep these files in manual review.
 16. **Unsafe visual redaction:** a bounding box or overlay can leave underlying pixels/text recoverable. Iteration two does not generate redacted files.
 17. **Vision hallucination/miss:** Gemma regions and entity labels are uncalibrated. Strict JSON validation prevents malformed data from being trusted, but cannot establish recall.
+18. **Annotated preview mistaken for redaction:** opt-in preview responses contain normalized source pixels, and downloaded annotated PNGs still reveal identifying content. Display an explicit NOT REDACTED notice and never attach them automatically. Exclude these responses/downloads from logs and public reports.
 
 ## Data retention policy (V1)
 

@@ -4,7 +4,8 @@
 
 ## Scope for the first slice
 
-Accept one local PNG, JPEG, WebP, or PDF upload through the localhost test UI.
+Accept one local PNG, JPEG, WebP, or PDF upload through the localhost test UI
+or extension side panel.
 Files stay in process memory and are never forwarded beyond loopback. Images
 are normalized to PNG before analysis. PDFs are limited to 5 pages and 6 MB,
 their text layer is extracted and scanned by deterministic rules, and every
@@ -46,14 +47,33 @@ text endpoint.
 {
   "data_base64": "...",
   "media_type": "application/pdf",
-  "vision_mode": "always"
+  "vision_mode": "always",
+  "include_previews": true
 }
 ```
 
 The result includes `media_type`, `page_count`, optional `sanitized_text`,
 non-sensitive `findings`, `status`, vision attempt/success flags, warnings, and
 `export_available: false`. File names, raw model output, extracted identifiers,
-and original upload bytes are omitted.
+and original upload bytes are omitted by default. When `include_previews` is
+explicitly true, `preview_pages` contains the normalized PNG page images as data
+URLs. These contain private visible content and must not be logged or treated
+as sanitized output. The authenticated UI uses exactly the images sent to Gemma,
+so normalized coordinates align after EXIF rotation and PDF rendering.
+
+## Visual review output
+
+Both interfaces draw numbered red bounding boxes and show corresponding
+plain-language labels. Regions are approximate model proposals; a PHONE label
+on an Aadhaar card may be wrong. Unlocated text/metadata/model findings remain
+listed with an explicit location-unavailable message; no coordinates are invented.
+Missing boxes never mean the document is safe.
+
+Users can deliberately download each annotated page as a PNG labelled
+**NOT REDACTED**. This is inspection output containing original visible content,
+not a cleaned image/PDF. Upload results cannot authorize copying/insertion or
+attachment transfer into ChatGPT. Clearing/replacing the draft or file clears
+the preview and invalidates pending results.
 
 ## Status rules
 
@@ -71,6 +91,7 @@ and original upload bytes are omitted.
 - Supported types: PNG, JPEG, WebP, PDF.
 - Maximum upload: 6 MB; maximum PDF length: 5 pages.
 - Maximum decoded image: 20 megapixels; normalized maximum edge: 2200 pixels.
+- PDF render scale is bounded before native raster allocation.
 - Encrypted PDFs are rejected.
 - PDF author/title/subject/keyword metadata presence is flagged without values.
 - Embedded files are flagged as unscanned high risk.

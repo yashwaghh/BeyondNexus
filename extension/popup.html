@@ -9,6 +9,12 @@
   <textarea id="source" maxlength="50000" placeholder="Write your private draft here. It stays in this panel until local review."></textarea>
   <div class="row"><button id="capture">Capture ChatGPT draft</button><select id="mode" aria-label="Scan mode"><option value="on-uncertain">Smart local scan</option><option value="off">Rules only</option><option value="always">Always use Gemma</option></select></div>
   <button id="scan" class="primary">Review locally</button>
+  <section class="upload-panel">
+    <label for="upload">Image or small PDF · 6 MB / 5 pages</label>
+    <input id="upload" type="file" accept="image/png,image/jpeg,image/webp,application/pdf">
+    <button id="scan-file">Review file &amp; show boxes</button>
+    <p>File inspection only. Original uploads are never attached to ChatGPT.</p>
+  </section>
   <section id="output" hidden>
     <div class="status-row"><strong>Sanitized draft</strong><span id="status"></span></div>
     <textarea id="result" readonly></textarea>
@@ -17,7 +23,8 @@
     <div class="row"><button id="copy" disabled>Copy</button><button id="insert" disabled>Insert into ChatGPT</button></div>
   </section>
   <p id="message" role="status"></p>
+  <section id="document-preview" aria-live="polite"></section>
   <button id="clear">Clear private draft</button>
-  <script src="composer.js"></script><script src="popup.js"></script>
+  <script src="preview.js"></script><script src="composer.js"></script><script src="popup.js"></script>
 </body>
 </html>

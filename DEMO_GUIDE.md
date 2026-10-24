@@ -2,6 +2,27 @@
 
 This document outlines the **live demonstration script** and milestone capabilities for PrivacyGate: a local-first, zero-cloud PII pre-sharing guardrail powered by deterministic rules and an on-device Google Gemma 4 fallback model.
 
+## Updated visual and extension demonstration
+
+- Pull the latest code, restart the local server, and reload extension v0.3.0.
+  Allow its scoped ChatGPT site access. Settings shows the exact server command
+  with extension origin and offers **Test local connection**.
+- In the local UI or extension choose a synthetic image/small PDF and review it.
+  Show the numbered boxes, matching labels, and explicit location-unavailable
+  findings. Download an annotated PNG only to demonstrate inspection output:
+  it retains visible private information and is **NOT REDACTED**.
+- Compose a synthetic prompt in the panel, connect the intended ChatGPT tab,
+  scan, review/approve, and insert. Do not click Send for the integration demo.
+- Current automated evidence: 53 Python tests and 12 extension tests; installed
+  Edge/Chromium extension with real bridge passed the full controller path on
+  a synthetic ChatGPT page, file previews, actual download, and two-page PDF.
+- A fresh live ChatGPT automation attempt stopped at Cloudflare human
+  verification. Demonstrate actual ChatGPT in your normal browser manually;
+  do not claim automated live-site certification or perfect PII recall.
+- Mac image/PDF smoke passed in upstream evidence (30.23s / 37.77s), but the
+  image detected only PERSON despite an email also being present. Use this to
+  explain the human-review requirement and incomplete detection coverage.
+
 ---
 
 ## 🌟 The Core Value Proposition

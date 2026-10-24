@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "PrivacyGate Local Review",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "minimum_chrome_version": "116",
   "description": "User-invoked local PII review before copying or inserting text.",
-  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "clipboardWrite"],
+  "permissions": ["scripting", "storage", "sidePanel", "clipboardWrite"],
   "background": {"service_worker": "service_worker.js"},
   "side_panel": {"default_path": "popup.html"},
-  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "host_permissions": ["http://127.0.0.1:8765/*", "https://chatgpt.com/*"],
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob:; connect-src http://127.0.0.1:8765"},
   "action": {
     "default_title": "Review with PrivacyGate"
   },

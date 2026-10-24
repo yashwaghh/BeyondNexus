@@ -30,9 +30,16 @@ It never clicks Send. This is a browser extension, not an in-chat skill.
 9. With Gemma ready, test `My name is Aarav Kulkarni. Summarize this synthetic ticket.`
    using **Always use Gemma**. The complete local request can take a minute.
 
+Settings shows the exact server startup command including your extension ID.
+Use **Test local connection** to validate both the token and allowed origin.
+An origin error means the server needs restarting with that command; a token
+error means its current token needs saving again.
+
 If access is denied after changing tabs, click the toolbar icon again on the
-intended ChatGPT tab and reconnect. The extension has no permanent ChatGPT host
-permission. A changed website draft requires recapture/review; it is never
+intended ChatGPT tab and reconnect. The extension requests access only to
+ChatGPT and the loopback bridge during installation. No background content
+script reads the page; capture/insertion happen only on your clicks. You can
+restrict site access in Chrome extension settings. A changed website draft requires recapture/review; it is never
 silently overwritten. Unknown editor layouts fail with a copy fallback.
 
 ## Privacy boundary and current limits
@@ -45,9 +52,15 @@ silently overwritten. Unknown editor layouts fail with a copy fallback.
   the token locally. Clear the draft when finished; clipboard copies persist
   independently. Aborting a request does not necessarily cancel model computation.
 - Exact loopback URL only; no analytics, remote model, remote code or history scan.
+- The side panel also reviews image/PDF uploads through the local bridge.
+  Numbered boxes use the same normalized page pixels sent to Gemma. Findings
+  without a reliable box are explicitly listed as location unavailable.
+  You can download each annotated page as a PNG for inspection. **It contains
+  the original visible private content; it is NOT redacted or safe to share.**
+  File results never authorize text insertion/copy, and files are never attached.
 - No automatic interception, attachment transfer, native ChatGPT app support,
-  Safari support, or secure file redaction. Image/PDF inspection remains in the
-  local web UI while live Mac vision validation is pending.
+  Safari support, or secure file redaction. Basic live Mac vision smoke passed;
+  recall and localization quality remain unbenchmarked.
 - ChatGPT composer selectors and contenteditable editing are experimental.
   Synthetic tests pass; current live ChatGPT/Chrome end-to-end verification
   remains a manual acceptance gate. Never test with real private material first.
@@ -67,3 +80,13 @@ insertion. Inspect browser Network tools for extension-origin requests to
 
 Optional package: `python scripts/package_extension.py` writes
 `dist/privacygate-extension.zip`; extract it before **Load unpacked**.
+
+Developer browser smoke: install dev-only Playwright (`npm install --no-save
+--package-lock=false playwright@1.62.1` and `npx playwright install chromium`), then run
+`node scripts/smoke_browser.cjs` with Python dependencies installed. This loads
+the actual extension in an isolated Chromium profile, uses a synthetic local
+vision model and a simulated ChatGPT page, and does not send a chat message.
+It is browser integration evidence, not live Gemma quality or live-site evidence.
+The optional `--live-site` flag additionally checks the current unauthenticated
+ChatGPT website in a disposable profile with a synthetic masked draft. It makes
+website requests and never clicks Send; Cloudflare/login restrictions can block it.

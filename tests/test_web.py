@@ -109,10 +109,18 @@ class WebBridgeTests(unittest.TestCase):
             "data_base64": base64.b64encode(image.getvalue()).decode('ascii'),
             "media_type": "image/png",
             "vision_mode": "always",
+            "include_previews": True,
         })
         self.assertEqual(status, 200)
         self.assertEqual(body["status"], "BLOCKED_UNVERIFIED")
         self.assertFalse(body["vision_succeeded"])
+        self.assertTrue(body['preview_pages'][0]['image_data_url'].startswith('data:image/png;base64,'))
+        self.assertFalse(body['export_available'])
+
+    def test_preview_flag_must_be_boolean(self):
+        with self.assertRaises(HTTPError) as caught:
+            self.request_file({'data_base64': 'eA==', 'media_type': 'image/png', 'include_previews': 'true'})
+        self.assertEqual(caught.exception.code, 400)
 
 
 if __name__ == "__main__":
