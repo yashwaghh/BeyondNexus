@@ -1,5 +1,7 @@
 # PrivacyGate — Iteration 1
 
+[![macOS compatibility](https://github.com/yashwaghh/BeyondNexus/actions/workflows/macos.yml/badge.svg)](https://github.com/yashwaghh/BeyondNexus/actions/workflows/macos.yml)
+
 Local-first PII pre-sharing pipeline: **regex + validators → optional Gemma 4 via LM Studio → exact-span masking → human approval gate**.
 
 > **Status:** Prototype, not a guarantee of anonymity or compliance. Includes a localhost test UI and an unpacked, user-invoked Chrome prototype; neither automatically sends chat messages. Never use real identities to demo or debug.

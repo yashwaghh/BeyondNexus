@@ -17,6 +17,7 @@
 - [x] Add unpacked user-invoked Chrome MV3 prototype with review-before-copy/replace.
 - [ ] Run extension on a local dummy textarea and one selected supported website; complete offline network proof.
 - [x] Add a macOS/Apple Silicon Gemma fallback readiness command and synthetic smoke option.
+- [x] Add Apple Silicon GitHub Actions coverage for Python 3.10 and 3.13.
 
 ### 2026-10-24 — Scaffold author — Initial implementation
 - Goal: runnable rules-only CLI and optional local model fallback with validation contracts.
