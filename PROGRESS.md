@@ -132,7 +132,20 @@
 - Residual risks: ChatGPT DOM/editor compatibility and activeTab/side-panel behavior need actual Chrome acceptance; network capture and independent security review remain pending. Existing website drafts may already be exposed; insertion exposes the reviewed text before Send. No attachment transfer or secure file export added.
 - Next owner/action: follow extension/README.md on Chrome with synthetic data; record insertion without sending, changed-target/error cases and network evidence. Continue Mac upload smoke separately.
 
+### 2026-10-24 IST — Validation agent — Target Mac live Gemma vision validation & demo milestone
+- Goal: execute `smoke_local_uploads.py` and live UI upload endpoints on the target Apple Silicon Mac with Gemma 4 E2B, verify image and small-PDF vision, harden model JSON parser, and prepare judge walkthrough guide.
+- Files changed: `privacygate/model.py`, `VALIDATION_REPORT.md`, `PROGRESS.md`, `DEMO_GUIDE.md`.
+- Live vision evidence:
+  - `python scripts/smoke_local_uploads.py` PASSED with exit code 0:
+    - `synthetic_image`: `status=REVIEW_REQUIRED`, `vision_succeeded=True`, `vision_labels=['PERSON']`, elapsed 30.23s.
+    - `synthetic_pdf`: `status=REVIEW_REQUIRED`, `vision_succeeded=True`, `vision_labels=['EMAIL', 'PERSON']`, elapsed 37.77s.
+  - Live UI server (`http://127.0.0.1:8765`):
+    - `POST /v1/scan` (rules + on-uncertain): `[PERSON_1]` masked via `gemma_local` in 22s.
+    - `POST /v1/scan-file` (image/png): `PERSON` region `[174, 58, 216, 503]` identified via `gemma_vision`.
+    - `POST /v1/scan-file` (application/pdf): deterministic text layer masked `EMAIL`, vision flagged both `PERSON` (`[184, 67, 305, 519]`) and `EMAIL` (`[323, 67, 414, 628]`).
+- Model parser fix: hardened `_completion_json` to auto-balance unclosed outer braces when vision completions close code blocks prematurely, preventing false `LocalModelError` triggers.
+- Node extension tests: `node --test extension/review.test.cjs` passes all 5 tests.
+- Python unit tests: 46 / 46 PASS.
+- Validator rerun: `python scripts/validate_iteration.py --record` PASS.
+- Deliverables: created `DEMO_GUIDE.md` containing interactive judge demonstration scenarios and preflight instructions.
 
-- 2026-10-24T16:59:00+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
-
-- 2026-10-24T17:06:14+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.

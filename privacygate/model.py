@@ -84,11 +84,29 @@ class GemmaLocalClient:
             content = response['choices'][0]['message']['content']
             if not isinstance(content, str):
                 raise ValueError('Nontext completion')
-            content = re.sub(r'^\s*```(?:json)?\s*|\s*```\s*$', '', content.strip(), flags=re.I)
-            result = json.loads(content)
-            if not isinstance(result, dict):
-                raise ValueError('Unexpected result')
-            return result
+            cleaned = content.strip()
+            fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned, flags=re.I)
+            if fence_match:
+                candidate = fence_match.group(1).strip()
+            else:
+                candidate = re.sub(r'^\s*```(?:json)?\s*|\s*```\s*$', '', cleaned, flags=re.I)
+
+            # Try direct parse, then parse with balanced closing braces if omitted by model
+            closing_diff = max(0, candidate.count('{') - candidate.count('}'))
+            for attempt in ([candidate] if closing_diff == 0 else [candidate, candidate + ('}' * closing_diff)]):
+                try:
+                    result = json.loads(attempt)
+                    if isinstance(result, dict):
+                        return result
+                except json.JSONDecodeError:
+                    pass
+
+            json_match = re.search(r'(\{[\s\S]*\})', candidate)
+            if json_match:
+                result = json.loads(json_match.group(1))
+                if isinstance(result, dict):
+                    return result
+            raise ValueError('Unexpected result')
         except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
             raise LocalModelError('Model returned invalid JSON; input requires manual review.') from None
 
