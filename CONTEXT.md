@@ -1,0 +1,70 @@
+# PrivacyGate — Durable Project Context (read before every iteration)
+
+## Mission
+Protect users **before** they share text/documents with cloud AI tools. Optimize for minimizing unnecessary disclosure **while preserving task utility**, not blindly deleting all numbers. Local-only inference for privacy-sensitive inspection. Open-source, auditable, human-controlled.
+
+## Origin and non-negotiable constraints
+- Hacktoberfest Hack Day 2026; organizer problem statement **#3: PII redaction for Indian documents and languages**.
+- Project built from scratch in a new repository; main track requires public repo and open-source license; no real private documents in public repo.
+- Mac with 8 GB unified memory; Gemma 4 **E2B** preferred through **LM Studio**; **E4B** conditional on actual hardware headroom. Model family name is *Gemma*, not Gamma/Gemini.
+- Time-constrained demo. MVP = text prompts only, rule-first + optional local model + approval statuses.
+- Local analysis must not send raw personal data to hosted AI services.
+- No statements like 'fully safe', 'no PII remains', 'guaranteed anonymous', 'DPDP compliant'.
+
+## Architecture decisions (ADRs)
+
+| ID | Decision | Rationale | Revisit when |
+|---|---|---|---|
+| ADR-001 | Local Python regex/validation first | Fast, deterministic, testable | Robust baseline achieved |
+| ADR-002 | Conditional Gemma E2B via loopback LM Studio | Cost and data locality on 8 GB hardware | More hardware or evaluation data |
+| ADR-003 | Exact-span model candidates, not full-document rewrite | Prevent unrelated hallucinated edits | Stronger structured output evaluation |
+| ADR-004 | Human approval required before any future external sharing | No detector proves absence of PII | Independently audited reliability |
+| ADR-005 | Block if necessary model scan fails | No false green/safe status | Threat model review |
+| ADR-006 | Python standard library for initial runtime | Minimal setup for hackathon | After first working demo |
+| ADR-007 | Extension integration later | Browser/client internals are brittle, security-sensitive | V1 acceptance complete |
+| ADR-008 | Implement a user-invoked MV3 prototype before a ChatGPT plugin | Pre-sharing review must happen before cloud chat context; `activeTab` limits access | After dummy-page and supported-site security tests |
+
+## Current implementation
+
+- `privacygate/detectors.py`: EMAIL/PAN/AADHAAR/POSSIBLE_ID/PHONE/BANK_ACCOUNT rules.
+- `privacygate/model.py`: optional localhost model client; accepts only literal substring proposals.
+- `privacygate/pipeline.py`: chooses fallback, masks by character offsets, creates gate statuses.
+- `privacygate/__main__.py`: CLI; no forwarding capability.
+- `privacygate/web.py` + `privacygate/ui/`: authenticated loopback-only test UI; no forwarding capability.
+- `extension/`: unpacked MV3 manual capture/review/copy/replace prototype; never submits.
+- `tests/`: synthetic data and fail-closed cases.
+- `scripts/validate_iteration.py`: independent basic validation agent.
+
+See `IMPLEMENTATION.md` for exact commands, confidence policy and acceptance criteria.
+
+## V1 interface contract
+
+Input: `review_text(text: str, mode: 'off'|'on-uncertain'|'always', model: Optional[GemmaLocalClient])`.
+
+Output: `{sanitized_text, findings:[{start,end,entity,score_heuristic,source,rationale,decision}], status, requires_human_review, llm_attempted, llm_succeeded, warnings}`.
+
+Metadata omits original matched values, but `sanitized_text` may still contain missed PII. Treat it as private until a user has reviewed it.
+
+V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED`. None means certified safe.
+
+## Deferred scope / queue
+
+- V2 task-aware selective minimization: `task_goal`, retain/drop recommendations and user review.
+- V2 hardening of the implemented local bridge and Chrome MV3 prototype: token expiry, dummy-page/site matrix, offline network proof and security review. No guaranteed interception of every ChatGPT/Gemini/Claude request.
+- V3 document extraction, OCR, secure PDF redaction, additional languages and person/address NER benchmarks.
+- V3 existing baseline comparisons with Presidio, more robust evaluation, enterprise integration.
+
+## Agent persistence protocol
+
+1. Read `CONTEXT.md`, then `IMPLEMENTATION.md`, `AGENTS.md`, `PROGRESS.md`, `THREAT_MODEL.md`.
+2. Make only changes assigned to the current iteration; record ADR if making a major architecture change.
+3. Append a brief, sanitized entry to `PROGRESS.md`: timestamp, agent, files, test evidence, risk, next action.
+4. Run `python scripts/validate_iteration.py --record`; attach summary, not private prompts.
+5. Validation agent independently reviews requirements and signs off only on tested gates. Do not self-certify live LM Studio integration without running it locally.
+
+## Open questions needing evidence
+
+- Actual Gemma E2B JSON compliance and latency on user Mac? **Unverified**.
+- Is a regex-only policy acceptable for certain identifiers? Needs test set.
+- Chrome MV3 is the selected first target; supported-site evidence and store/distribution approach remain open.
+- What Hindi/Marathi detection accuracy can we demonstrate? Not established.

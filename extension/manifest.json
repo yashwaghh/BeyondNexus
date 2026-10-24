@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "PrivacyGate Local Review",
+  "version": "0.1.0",
+  "description": "User-invoked local PII review before copying or inserting text.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "action": {
+    "default_title": "Review with PrivacyGate",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}

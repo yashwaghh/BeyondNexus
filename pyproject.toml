@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "privacygate-hackday"
+version = "0.1.0"
+description = "Local-first regex + optional Gemma PII pre-sharing guardrail"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Hackathon team"}]
+dependencies = []
+
+[project.scripts]
+privacygate = "privacygate.__main__:main"
+privacygate-ui = "privacygate.web:main"
+privacygate-check-mac = "privacygate.macos_check:main"
+
+[tool.setuptools]
+packages = ["privacygate"]
+
+[tool.setuptools.package-data]
+privacygate = ["ui/*.html", "ui/*.js", "ui/*.css"]

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="privacygate-token" content="__PRIVACYGATE_TOKEN__">
+  <title>PrivacyGate Local Review</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">LOCAL REVIEW WORKBENCH</p>
+        <h1>PrivacyGate</h1>
+        <p class="lede">Inspect and mask sensitive text before you decide what to share.</p>
+      </div>
+      <span class="local-badge">● Loopback only</span>
+    </header>
+
+    <section class="notice">This prototype reduces accidental disclosure; it cannot prove text is anonymous or compliant.</section>
+
+    <section class="workspace">
+      <article class="card">
+        <div class="card-head"><h2>1. Source text</h2><span id="char-count">0 / 50,000</span></div>
+        <textarea id="source" maxlength="50000" spellcheck="false" placeholder="Paste synthetic test text here. Avoid real personal data while developing."></textarea>
+        <div class="controls">
+          <label>Scan mode
+            <select id="mode">
+              <option value="on-uncertain">Rules + Gemma when uncertain</option>
+              <option value="off">Rules only</option>
+              <option value="always">Always use local Gemma</option>
+            </select>
+          </label>
+          <button id="scan" class="primary">Review locally</button>
+        </div>
+      </article>
+
+      <article class="card result-card">
+        <div class="card-head"><h2>2. Sanitized draft</h2><span id="status" class="status idle">Not scanned</span></div>
+        <textarea id="result" readonly placeholder="Your locally sanitized draft will appear here."></textarea>
+        <div id="summary" class="summary">No scan results yet.</div>
+        <div id="warnings" class="warnings"></div>
+        <label class="approval"><input id="reviewed" type="checkbox" disabled> I reviewed the entire sanitized draft and understand that PII may remain.</label>
+        <button id="copy" disabled>Approve &amp; copy sanitized draft</button>
+      </article>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

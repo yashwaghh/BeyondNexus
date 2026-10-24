@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"><title>PrivacyGate</title></head>
+<body>
+  <header><div><span>LOCAL REVIEW</span><h1>PrivacyGate</h1></div><button id="settings" class="icon" title="Settings">⚙</button></header>
+  <p class="caution">This tool can miss personal information. It never sends the message for you.</p>
+  <label for="source">Text to review</label>
+  <textarea id="source" maxlength="50000" placeholder="Paste text or capture the focused composer."></textarea>
+  <div class="row"><button id="capture">Capture focused field</button><select id="mode" aria-label="Scan mode"><option value="on-uncertain">Smart local scan</option><option value="off">Rules only</option><option value="always">Always use Gemma</option></select></div>
+  <button id="scan" class="primary">Review locally</button>
+  <section id="output" hidden>
+    <div class="status-row"><strong>Sanitized draft</strong><span id="status"></span></div>
+    <textarea id="result" readonly></textarea>
+    <p id="summary"></p><div id="warnings"></div>
+    <label class="check"><input type="checkbox" id="reviewed"> I reviewed the complete draft; PII may remain.</label>
+    <div class="row"><button id="copy" disabled>Copy</button><button id="insert" disabled>Replace focused field</button></div>
+  </section>
+  <p id="message" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>
