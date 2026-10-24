@@ -96,3 +96,20 @@
 - 2026-10-24T16:34:12+00:00 | Validation agent | PASS | files=31/31, tests=46; live local model and external integrations unverified.
 
 - 2026-10-24T16:34:27+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
+
+- 2026-10-24T16:52:23+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
+
+### 2026-10-24 IST — Validation agent — Target Mac live Gemma fallback validation & bug fix
+- Goal: set up and validate the Gemma fallback option locally on the target Apple Silicon Mac and run all test cases.
+- Files changed: `privacygate/model.py`, `VALIDATION_REPORT.md`, `PROGRESS.md`.
+- Bug fixed: Gemma 4 extended reasoning exhausted the `max_tokens: 350` budget in `privacygate/model.py` (reasoning consumed ~288 tokens, cutting JSON completion mid-stream and failing closed with `BLOCKED_UNVERIFIED`). Increased `max_tokens` to 1024.
+- Test commands + aggregate results:
+  - Unit tests: `python -m unittest discover -s tests -v` -> 46/46 PASS.
+  - Validation script: `python scripts/validate_iteration.py --record` -> PASS (31/31 files, 46 tests).
+  - macOS check: `python -m privacygate.macos_check --smoke --timeout 75` -> PASS (all 6 checks PASS, synthetic span completed in ~22s).
+  - Local model smoke test: `python scripts/smoke_local_model.py` -> PASS (status: `REVIEW_REQUIRED`, `llm_succeeded: True`, entities: `['EMAIL', 'PERSON']`).
+  - End-to-end CLI: `--mode always` and `--mode on-uncertain` both successfully detect and mask exact `PERSON` spans via `gemma_local`.
+- Model/hardware verification (yes/no): YES; verified on Apple M1 (8 GB unified memory, macOS Darwin 27.0.0 arm64) using loaded `gemma4-e2b-instruct-pure` via LM Studio loopback server.
+- Residual risks / unsolved: Model inference takes ~22-52s per request on 8 GB unified memory; prompt/payload cap must be respected; human approval gate remains mandatory.
+- Next owner/action: Test local UI and optional unpacked Chrome extension with live fallback running.
+

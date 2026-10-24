@@ -106,7 +106,7 @@ class GemmaLocalClient:
         body = {
             'model': model,
             'temperature': 0,
-            'max_tokens': 350,
+            'max_tokens': 1024,
             'stream': False,
             'messages': [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': text}],
         }
@@ -151,7 +151,7 @@ class GemmaLocalClient:
         body = {
             'model': model,
             'temperature': 0,
-            'max_tokens': 450,
+            'max_tokens': 1024,
             'stream': False,
             'messages': [{
                 'role': 'user',
