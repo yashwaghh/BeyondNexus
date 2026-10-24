@@ -2,6 +2,7 @@ const $ = selector => document.querySelector(selector);
 const BRIDGE = 'http://127.0.0.1:8765';
 let latest = null, target = null, revision = 0, controller = null;
 const allowed = () => Boolean(latest && latest.export_available !== false && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED');
+$('#cancel').addEventListener('click', () => { resetApproval(); setMessage('Review cancelled. A running local model request may finish on the bridge.'); });
 $('#settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('#source').addEventListener('input', resetApproval);
 $('#mode').addEventListener('change', resetApproval);
@@ -59,7 +60,7 @@ $('#scan').addEventListener('click', async () => {
   if (!text.trim()) return setMessage('Enter text first.', true);
   $('#scan').disabled = true;
   $('#scan-file').disabled = true;
-  const request = new AbortController(); controller = request;
+  const request = new AbortController(); controller = request; $('#cancel').hidden = false;
   const timer = setTimeout(() => request.abort(), 180000);
   try {
     const config = await chrome.storage.local.get({bridgeToken: ''});
@@ -91,7 +92,7 @@ $('#scan').addEventListener('click', async () => {
       ? 'Local scan timed out. Nothing was inserted.' : (error.message || 'Local connection failed. Check Settings.'), true);
   } finally {
     clearTimeout(timer);
-    if (controller === request) { controller = null; $('#scan').disabled = false; $('#scan-file').disabled = false; }
+    if (controller === request) { controller = null; $('#cancel').hidden = true; $('#scan').disabled = false; $('#scan-file').disabled = false; }
   }
 });
 $('#scan-file').addEventListener('click', async () => {
@@ -99,9 +100,9 @@ $('#scan-file').addEventListener('click', async () => {
   const version = revision, file = $('#upload').files[0];
   if (!file) return setMessage('Choose an image or PDF first.', true);
   if (file.size > 6 * 1024 * 1024) return setMessage('File exceeds 6 MB.', true);
-  const request = new AbortController(); controller = request;
+  const request = new AbortController(); controller = request; $('#cancel').hidden = false;
   $('#scan-file').disabled = true; $('#scan').disabled = true;
-  const timer = setTimeout(() => request.abort(), 660000);
+  const timer = setTimeout(() => request.abort(), 840000);
   try {
     const config = await chrome.storage.local.get({bridgeToken: ''});
     if (!config.bridgeToken) throw new Error('Save the bridge token in Settings first.');
@@ -119,12 +120,21 @@ $('#scan-file').addEventListener('click', async () => {
     if (!response.ok) throw new Error(bridgeError(response.status));
     const body = await response.json();
     if (version !== revision) return;
+    $('#draft-actions').hidden = true; $('#result').hidden = true; $('#result-title').textContent = 'File review';
     $('#output').hidden = false; $('#status').textContent = body.status.replaceAll('_', ' ');
-    $('#result').value = 'File inspection only. No redacted file is produced and nothing is attached to ChatGPT.';
+    $('#result').value = 'Review and edit masks below to export a redacted file. Nothing is attached to ChatGPT.';
     $('#summary').textContent = `${body.findings.length} finding(s). Inspect the numbered boxes below.`;
     $('#warnings').textContent = body.warnings.join(' ');
     // Never set latest: file results cannot authorize text insertion or copying.
-    await PrivacyGatePreview.render($('#document-preview'), body);
+    await PrivacyGatePreview.render($('#document-preview'), body, {exportFile: async (edits, signal) => {
+      const response = await fetch(`${BRIDGE}/v1/redact-export`, {
+        method:'POST', signal,
+        headers:{Authorization:`Bearer ${config.bridgeToken}`, 'Content-Type':'application/json'},
+        body:JSON.stringify({...edits, data_base64:data, media_type:file.type, export_ticket:body.export_ticket})
+      });
+      if (!response.ok) throw new Error('Export failed. Rescan if the 15-minute authorization expired.');
+      return response.blob();
+    }});
     if (version === revision) setMessage(body.status === 'BLOCKED_UNVERIFIED'
       ? 'Visual verification incomplete. Inspect the original; previews are not redaction.'
       : 'Suspected information is highlighted. Labels and locations may be wrong; inspect every page.');
@@ -132,7 +142,7 @@ $('#scan-file').addEventListener('click', async () => {
     if (version === revision) setMessage(error.name === 'AbortError' ? 'File review timed out.' : error.message, true);
   } finally {
     clearTimeout(timer);
-    if (controller === request) { controller = null; $('#scan-file').disabled = false; $('#scan').disabled = false; }
+    if (controller === request) { controller = null; $('#cancel').hidden = true; $('#scan-file').disabled = false; $('#scan').disabled = false; }
   }
 });
 function bridgeError(status) {
@@ -165,6 +175,7 @@ $('#clear').addEventListener('click', () => {
 function resetApproval() {
   revision++; controller?.abort();
   latest = null; $('#output').hidden = true; $('#result').value = '';
+  $('#draft-actions').hidden = false; $('#result').hidden = false; $('#result-title').textContent = 'Sanitized draft';
   $('#summary').textContent = ''; $('#warnings').textContent = '';
   $('#reviewed').checked = false; $('#reviewed').disabled = true; updateActions();
   PrivacyGatePreview.clear($('#document-preview'));

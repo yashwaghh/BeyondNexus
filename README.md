@@ -131,3 +131,6 @@ Project code: MIT. Gemma 4 weights are **not bundled** and are licensed separate
 
 ## Iteration 3: OCR + rules + Gemma uploads
 Uploads now require local Tesseract as well as Gemma vision. On Mac, install with `brew install tesseract`, then run `python -m privacygate.macos_check --uploads --smoke --timeout 75`. See [ITERATION_3.md](ITERATION_3.md) for setup, benchmark commands, confidence semantics and pending hardware checks. Reload the extension after updating. Missing OCR blocks uploads rather than reporting a completed scan.
+
+## Reviewed redaction and export
+The extension (v0.4.0) and local UI now let you draw/remove masks, inspect a blacked-out preview and explicitly download a redacted PNG or rebuilt image-only PDF. See [REDACTION_EXPORT.md](REDACTION_EXPORT.md) for usage and limits. Restart the bridge and reload the extension after updating. Masked pixels are removed, but missed information outside the masks can remain.

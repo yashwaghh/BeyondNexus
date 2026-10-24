@@ -193,3 +193,19 @@
 - 2026-10-24T19:31:32+00:00 | Validation agent | PASS | files=43/43, tests=66; live text/vision model and external integrations unverified.
 
 - Final iteration-three local gate: validator PASS, 43/43 files, 66 Python tests, rule benchmark/CLI checks; 12 extension tests PASS. Installed Edge browser smoke rerun PASS; updated side-panel screenshot inspected. Native upload benchmark explicitly BLOCKED_UNVERIFIED (Tesseract unavailable), not counted as a passing accuracy test. Mac CI and live OCR/Gemma metrics remain pending.
+
+### 2026-10-25 IST - Extension refinement and reviewed redaction/export
+- User scope: extension optimization, redaction and export. Added ADR-015 and REDACTION_EXPORT.md with design, workflow and handoff.
+- Implemented drag-to-add masks, remove/redraw, masked preview, separate explicit export approval, approval/download invalidation after edits, in-memory blob cleanup and cancellation. Extension v0.4.0 separates file review from text insertion controls and exposes Cancel review.
+- Backend destructively overwrites selected pixels (outward rounding + 2px), exports fresh metadata-free PNG or lossless raster PDF; no original PDF text/form/annotation/attachment objects. Preserves rendered PDF page sizes. Signed 15-minute tickets bind completed scan to exact bytes/media and bridge instance. Failed required scans cannot authorize export. No auto-attach/send.
+- Evidence: 75 Python tests and 13 extension tests PASS. Installed Edge/Chromium integration PASS with real bridge and synthetic OCR/model/page doubles, including mask edits, actual redacted PNG pixel checks, PNG/PDF downloads, two-page PDF parse/render and stale-link invalidation. Visually inspected editor and exported PDF render.
+- Limits: pixels outside selected masks can retain missed PII; raster PDF loses text/search/accessibility/signatures/forms and is capped at review resolution. Target Mac live OCR/Gemma, memory/latency and normal authenticated ChatGPT acceptance remain unverified. Cancel does not kill an already-running local model call.
+- Next action: final validator, package and push; user pulls, restarts bridge, reloads extension, and tests synthetic files on target Mac following REDACTION_EXPORT.md.
+
+- 2026-10-24T19:39:32+00:00 | Validation agent | FAIL | files=46/46, tests=75; live text/vision model and external integrations unverified.
+
+- 2026-10-24T19:39:51+00:00 | Validation agent | PASS | files=46/46, tests=75; live text/vision model and external integrations unverified.
+
+- 2026-10-24T19:41:08+00:00 | Validation agent | PASS | files=46/46, tests=75; live text/vision model and external integrations unverified.
+
+- Final export gate: validator PASS (46/46 required files, 75 Python tests); 13 extension tests PASS; installed-extension browser rerun PASS, including whole-page masking and approved PNG/PDF export. One initial aggregate validator invocation reported test failure without identifiers; direct suite, three captured stability runs and subsequent validators all passed. Validator now prints failing test identifiers only to make any recurrence diagnosable without logging payloads. No cause reproduced. Final package refreshed; native target-Mac/live-site checks remain pending.

@@ -90,3 +90,6 @@ It is browser integration evidence, not live Gemma quality or live-site evidence
 The optional `--live-site` flag additionally checks the current unauthenticated
 ChatGPT website in a disposable profile with a synthetic masked draft. It makes
 website requests and never clicks Send; Cloudflare/login restrictions can block it.
+
+## Editable masks and exports (v0.4.0)
+Review a file, draw extra masks on each page or remove/redraw incorrect ones, enable Show masked preview, inspect every page and check export approval. Prepare PNG (one page) or image-only PDF, then download. Failed required scans block export; review authorization expires after 15 minutes or a bridge restart. New input, mask edits or disconnects revoke prepared downloads. Existing annotated PNG links retain original pixels and are NOT redacted. Attach the downloaded copy yourself after inspecting it. Cancel review aborts browser waiting; an ongoing local model task may still finish. Full logic and limits: ../REDACTION_EXPORT.md.

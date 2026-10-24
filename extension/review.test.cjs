@@ -56,6 +56,18 @@ test('late response cannot approve a changed draft', async () => {
   assert.equal(p.node('#output').hidden, true);
   p.node('#reviewed').checked = true; await p.fire('#copy'); assert.equal(p.copies(), 0);
 });
+
+test('cancelled review rejects its late response and keeps insertion blocked', async () => {
+  let resolve, started;
+  const began = new Promise(r => { started = r; });
+  const p = panel(() => { started(); return new Promise(r => { resolve = r; }); });
+  const pending = p.fire('#scan'); await began;
+  await p.fire('#cancel');
+  resolve(reply('READY_FOR_MANUAL_APPROVAL')); await pending;
+  assert.equal(p.node('#output').hidden, true);
+  p.node('#reviewed').checked = true; await p.fire('#copy');
+  assert.equal(p.copies(), 0);
+});
 test('failed rescan removes old approval', async () => {
   let fail = false;
   const p = panel(async () => { if (fail) throw new Error(); return reply('REVIEW_REQUIRED'); });

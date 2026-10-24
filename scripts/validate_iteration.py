@@ -19,6 +19,7 @@ REQUIRED = [
     'privacygate/readiness.py', 'privacygate/macos_check.py',
     'privacygate/uploads.py', 'privacygate/ocr.py', 'tests/test_ocr.py',
     'ITERATION_3.md', 'scripts/benchmark_uploads.py',
+    'privacygate/redaction.py', 'tests/test_redaction.py', 'REDACTION_EXPORT.md',
     'extension/manifest.json', 'extension/popup.js', 'extension/README.md',
     'tests/test_detectors.py', 'tests/test_pipeline.py', 'tests/test_readiness.py',
     'tests/test_uploads.py', 'tests/test_web.py',
@@ -52,6 +53,10 @@ def main() -> int:
     if missing:
         print('Missing files:', ', '.join(missing))
     print('Unit tests:', test_count, 'PASS' if test.returncode == 0 else 'FAIL')
+    if test.returncode:
+        # Only test identifiers, never assertion values or private payloads.
+        for failed in re.findall(r'^(?:FAIL|ERROR): ([^\n]+)', test.stderr, re.MULTILINE):
+            print('Failed test:', failed)
     print('Benchmark script exit code:', benchmark.returncode)
     print('CLI fail-closed smoke:', 'PASS' if cli_ok else 'FAIL')
     print('LM Studio live E2B inference: NOT VERIFIED by this validator (run separately).')

@@ -82,3 +82,6 @@ V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED
 
 ## Iteration 3 accepted scope (2026-10-25)
 Local OCR + rules + Gemma vision with detection/localization benchmarks. OCR is required for upload verification; missing OCR blocks uploads. Every page still receives vision regardless of OCR confidence. See ITERATION_3.md; native target-Mac combined quality remains pending.
+
+## Reviewed export decision (2026-10-25)
+ADR-015: user authorized extension improvements, redaction and export. Use destructive raster masks and fresh lossless image-only PDFs, preserving rendered page dimensions and excluding all source PDF objects. Explicit masked-preview approval and a completed file-bound scan ticket gate local downloads; no automatic attachment/send. This supersedes the historical no-export restriction in ADR-010 for the new workflow. See REDACTION_EXPORT.md.

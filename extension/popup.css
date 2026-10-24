@@ -29,3 +29,11 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 #document-preview:empty { display:none; }
 #document-preview ul { padding-left:20px; }
 pre { white-space:pre-wrap; overflow-wrap:anywhere; background:var(--line); padding:10px; }
+
+.redaction-tools { border:1px solid #9eb5a8; border-radius:10px; padding:12px; margin-top:18px; display:grid; gap:10px; }
+.redaction-tools label { display:flex; align-items:flex-start; gap:8px; }
+.redaction-tools input[type=checkbox] { flex:0 0 auto; width:auto; }
+.mask-list { max-height:180px; overflow:auto; padding-left:22px; margin:0; }
+.mask-list li { margin:5px 0; }
+.mask-list button { padding:4px 8px; }
+.redacted-download { display:block; color:#086044; font-weight:bold; padding:10px 0; }

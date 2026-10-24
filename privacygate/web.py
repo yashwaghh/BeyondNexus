@@ -8,6 +8,9 @@ import argparse
 import base64
 import binascii
 import json
+import hashlib
+import hmac
+import time
 import os
 from pathlib import Path
 import re
@@ -20,6 +23,7 @@ from urllib.parse import urlparse
 from .model import GemmaLocalClient
 from .pipeline import review_text
 from .readiness import probe_local_gemma
+from .redaction import redact_export
 from .uploads import UploadReviewError, review_upload
 
 MAX_REQUEST_BYTES = 100_000
@@ -39,6 +43,7 @@ class PrivacyGateServer(ThreadingHTTPServer):
         self.extension_origin = extension_origin
         self.model = model
         self.ocr = ocr
+        self.export_secret = secrets.token_bytes(32)
         self.scan_slots = threading.BoundedSemaphore(2)
 
     @property
@@ -85,7 +90,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         return secrets.compare_digest(supplied, expected)
 
     def do_OPTIONS(self) -> None:
-        if urlparse(self.path).path not in {"/v1/scan", "/v1/scan-file"} or not (origin := self._allowed_origin()):
+        if urlparse(self.path).path not in {"/v1/scan", "/v1/scan-file", "/v1/redact-export"} or not (origin := self._allowed_origin()):
             self._json(HTTPStatus.FORBIDDEN, {"error": "Origin not allowed"})
             return
         self.send_response(HTTPStatus.NO_CONTENT)
@@ -118,7 +123,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {"/v1/scan", "/v1/scan-file"}:
+        if path not in {"/v1/scan", "/v1/scan-file", "/v1/redact-export"}:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
         origin = self._allowed_origin()
@@ -135,10 +140,12 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        request_limit = MAX_UPLOAD_REQUEST_BYTES if path == "/v1/scan-file" else MAX_REQUEST_BYTES
+        request_limit = MAX_UPLOAD_REQUEST_BYTES if path != "/v1/scan" else MAX_REQUEST_BYTES
         if length <= 0 or length > request_limit:
             self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Invalid request size"}, cors_origin=origin)
             return
+        ticket = None
+        export_result = None
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
@@ -166,14 +173,37 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
                         upload = base64.b64decode(encoded, validate=True)
                     except (binascii.Error, ValueError):
                         raise ValueError from None
-                    result = review_upload(upload, media_type, vision_mode=vision_mode,
-                                           model=self.server.model, include_previews=include_previews, ocr=self.server.ocr)
+                    if path == "/v1/redact-export":
+                        ticket = payload.get('export_ticket', '')
+                        if not isinstance(ticket, str) or not re.fullmatch(r'[0-9]{10}\.[0-9a-f]{64}', ticket):
+                            raise ValueError
+                        expiry, signature = ticket.split('.', 1)
+                        message = f'{expiry}:{media_type}:{hashlib.sha256(upload).hexdigest()}'.encode()
+                        expected = hmac.new(self.server.export_secret, message, hashlib.sha256).hexdigest()
+                        if not hmac.compare_digest(signature, expected) or not time.time() < int(expiry) <= time.time()+901:
+                            raise ValueError
+                        export_result = redact_export(upload, media_type, payload.get('regions'),
+                                                      payload.get('output_format'), reviewed=payload.get('reviewed'))
+                    else:
+                        result = review_upload(upload, media_type, vision_mode=vision_mode,
+                                               model=self.server.model, include_previews=include_previews, ocr=self.server.ocr)
+                        if result.status != 'BLOCKED_UNVERIFIED':
+                            expiry = str(int(time.time())+900)
+                            message = f'{expiry}:{media_type}:{hashlib.sha256(upload).hexdigest()}'.encode()
+                            ticket = expiry+'.'+hmac.new(self.server.export_secret, message, hashlib.sha256).hexdigest()
             finally:
                 self.server.scan_slots.release()
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, UploadReviewError):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "Invalid scan request"}, cors_origin=origin)
             return
-        self._json(HTTPStatus.OK, result.to_dict(), cors_origin=origin)
+        if export_result:
+            content, content_type = export_result
+            self._send(HTTPStatus.OK, content, content_type, cors_origin=origin)
+        else:
+            body = result.to_dict()
+            if path == '/v1/scan-file' and ticket:
+                body['export_ticket'] = ticket
+            self._json(HTTPStatus.OK, body, cors_origin=origin)
 
 
 def create_server(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, token: str,

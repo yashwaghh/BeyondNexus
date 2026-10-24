@@ -253,3 +253,6 @@ python scripts/smoke_local_model.py      # requires running LM Studio; outputs o
 
 ## Iteration 3 implementation supplement
 See ITERATION_3.md for the accepted OCR pipeline, separate recognition/rule confidence, evidence grouping, failure states, benchmark definitions and target-Mac acceptance commands. Earlier iteration-two descriptions without OCR are historical.
+
+## Reviewed redaction/export supplement
+REDACTION_EXPORT.md defines the implemented image/PDF export path and its acceptance tests. export_available=false on scan results still blocks text-copy/insertion; the separate export_ticket permits only reviewed file generation. Earlier no-file-export descriptions refer to previous iterations.

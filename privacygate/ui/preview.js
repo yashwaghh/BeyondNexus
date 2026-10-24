@@ -1,6 +1,7 @@
 /* Shared upload preview. Boxes annotate suspected PII; pixels remain visible. */
 globalThis.PrivacyGatePreview = (() => {
   const versions = new WeakMap();
+  const cleanups = new WeakMap();
   const names = {
     PERSON: 'Person / identifying photograph', ADDRESS: 'Postal address',
     PHONE: 'Possible phone number', EMAIL: 'Email address', PAN: 'PAN identifier',
@@ -13,13 +14,14 @@ globalThis.PrivacyGatePreview = (() => {
       && box.every(value => Number.isInteger(value) && value >= 0 && value <= 1000)
       && box[0] < box[2] && box[1] < box[3];
   }
-  function clear(root) { versions.set(root, (versions.get(root) || 0) + 1); root.replaceChildren(); }
-  async function render(root, body) {
+  function clear(root) { cleanups.get(root)?.(); cleanups.delete(root); versions.set(root, (versions.get(root) || 0) + 1); root.replaceChildren(); }
+  async function render(root, body, options = {}) {
     clear(root);
     const version = versions.get(root);
     const heading = document.createElement('h3'); heading.textContent = 'Suspicious information preview';
     const note = document.createElement('p');
     note.textContent = 'Boxes show approximate OCR/rule or model locations, not verified identity types. This is NOT redaction: all original visible information remains. Missing boxes do not mean a page is safe.';
+    if (options.exportFile) note.textContent = 'Detected boxes are approximate. Add or correct masks, then inspect the masked preview before export. Annotated PNG downloads retain original pixels and are NOT redacted.';
     root.append(heading, note);
     for (const page of body.ocr_pages || []) {
       const quality = document.createElement('p');
@@ -43,6 +45,7 @@ globalThis.PrivacyGatePreview = (() => {
       }
       root.append(list);
     }
+    const rendered = [];
     for (const page of pages) {
       if (versions.get(root) !== version) return;
       if (typeof page.image_data_url !== 'string' || !page.image_data_url.startsWith('data:image/png;base64,')) continue;
@@ -86,10 +89,125 @@ globalThis.PrivacyGatePreview = (() => {
           ctx.fillStyle = '#fff'; ctx.fillText(text, labelX + 6, labelY + font);
         }
         link.href = canvas.toDataURL('image/png'); figure.append(link);
+        rendered.push({page: page.page, canvas, image, figure});
       } catch {
         message.textContent = 'Preview could not be decoded. Inspect the original page locally.';
       }
     }
+    if (versions.get(root) === version && rendered.length === pages.length && options.exportFile)
+      setupEditor(root, body, rendered, options.exportFile, version);
+  }
+  function setupEditor(root, body, pages, exportFile, version) {
+    const panel = document.createElement('section'); panel.className = 'redaction-tools';
+    const heading = document.createElement('h3'); heading.textContent = 'Redact and export';
+    const help = document.createElement('p');
+    help.textContent = 'Drag on a page to add a black mask. Remove an incorrect mask below, then draw its replacement. Check every page, including findings without a location. Exports remove masked pixels; missed information may remain.';
+    const toggleLabel = document.createElement('label');
+    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.className = 'masked-toggle';
+    toggleLabel.append(toggle, ' Show masked preview');
+    const approvalLabel = document.createElement('label');
+    const approval = document.createElement('input'); approval.type = 'checkbox'; approval.className = 'export-reviewed';
+    approvalLabel.append(approval, ' I inspected every masked page and covered missed or unlocated personal information.');
+    const list = document.createElement('ul'); list.className = 'mask-list';
+    const message = document.createElement('p'); message.setAttribute('role', 'status');
+    const downloads = document.createElement('div');
+    const buttons = [];
+    let regions = body.findings.filter(f => f.page && validBox(f.region_0_1000))
+      .map(f => ({page: f.page, box: [...f.region_0_1000]}));
+    let url = null, request = null, editVersion = 0;
+    const enabled = body.status !== 'BLOCKED_UNVERIFIED' && typeof body.export_ticket === 'string';
+    function revoke() {
+      editVersion++; approval.checked = false; request?.abort(); request = null;
+      if (url) URL.revokeObjectURL(url); url = null; downloads.replaceChildren(); message.textContent = "";
+      update();
+    }
+    cleanups.set(root, revoke);
+    function update() {
+      for (const button of buttons) button.disabled = !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
+    }
+    function draw() {
+      for (const {page, canvas, image, figure} of pages) {
+        figure.querySelector("figcaption").textContent = `Page ${page} / ${toggle.checked ? "masked preview" : "original with mask outlines"}`;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+        for (const region of regions.filter(r => r.page === page)) {
+          const [top,left,bottom,right] = region.box;
+          const x = Math.max(0, Math.floor(left*canvas.width/1000)-2);
+          const y = Math.max(0, Math.floor(top*canvas.height/1000)-2);
+          const endX = Math.min(canvas.width, Math.ceil(right*canvas.width/1000)+2);
+          const endY = Math.min(canvas.height, Math.ceil(bottom*canvas.height/1000)+2);
+          if (toggle.checked) { ctx.fillStyle = '#000'; ctx.fillRect(x, y, endX-x, endY-y); }
+          else { ctx.strokeStyle = '#c21f30'; ctx.lineWidth = Math.max(2,canvas.width/350); ctx.strokeRect(x,y,endX-x,endY-y); }
+        }
+      }
+    }
+    function listMasks() {
+      list.replaceChildren();
+      regions.forEach((region, index) => {
+        const row = document.createElement('li'); row.textContent = `Mask ${index+1} / page ${region.page} `;
+        const remove = document.createElement('button'); remove.textContent = 'Remove'; remove.type = 'button';
+        remove.addEventListener('click', () => { revoke(); regions.splice(index,1); listMasks(); draw(); });
+        row.append(remove); list.append(row);
+      });
+    }
+    for (const {page, canvas, figure} of pages) {
+      const fullPage = document.createElement('button'); fullPage.type = 'button'; fullPage.className = 'mask-page';
+      fullPage.textContent = 'Mask whole page';
+      fullPage.addEventListener('click', () => {
+        revoke();
+        if (regions.length < 500) { regions.push({page, box:[0,0,1000,1000]}); listMasks(); draw(); }
+      });
+      figure.append(fullPage);
+      canvas.style.touchAction = 'none'; canvas.style.cursor = 'crosshair';
+      let start = null;
+      const point = event => {
+        const rect = canvas.getBoundingClientRect();
+        return [Math.max(0,Math.min(1000,Math.round((event.clientY-rect.top)/rect.height*1000))),
+                Math.max(0,Math.min(1000,Math.round((event.clientX-rect.left)/rect.width*1000)))];
+      };
+      canvas.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        revoke(); start = point(event); canvas.setPointerCapture(event.pointerId);
+      });
+      canvas.addEventListener('pointermove', event => {
+        if (!start) return;
+        draw(); const end = point(event), ctx = canvas.getContext('2d');
+        ctx.strokeStyle = '#c21f30'; ctx.lineWidth = Math.max(2,canvas.width/350);
+        ctx.strokeRect(start[1]*canvas.width/1000, start[0]*canvas.height/1000,
+                       (end[1]-start[1])*canvas.width/1000,(end[0]-start[0])*canvas.height/1000);
+      });
+      canvas.addEventListener('pointerup', event => {
+        if (!start) return;
+        const end = point(event), box = [Math.min(start[0],end[0]),Math.min(start[1],end[1]),Math.max(start[0],end[0]),Math.max(start[1],end[1])];
+        start = null;
+        if (validBox(box) && regions.length < 500) { regions.push({page,box}); listMasks(); draw(); }
+      });
+      canvas.addEventListener('pointercancel', () => { start = null; draw(); });
+    }
+    toggle.addEventListener('change', () => { revoke(); draw(); });
+    approval.addEventListener('change', () => { if (!approval.checked) revoke(); update(); });
+    panel.append(heading, help, toggleLabel, approvalLabel, list);
+    for (const format of pages.length === 1 ? ['png','pdf'] : ['pdf']) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = `export-${format}`;
+      button.textContent = `Prepare redacted ${format.toUpperCase()}`; buttons.push(button);
+      button.addEventListener('click', async () => {
+        if (!enabled || !approval.checked || !toggle.checked || request) return;
+        const edit = editVersion; request = new AbortController(); const current = request;
+        const timer = setTimeout(() => current.abort(), 60000); update(); message.textContent = 'Building a new file locally...';
+        try {
+          const blob = await exportFile({regions, output_format:format, reviewed:true}, current.signal);
+          if (versions.get(root) !== version || editVersion !== edit) return;
+          if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
+          const link = document.createElement('a'); link.href = url; link.className = 'redacted-download';
+          link.download = `privacygate-redacted.${format}`; link.textContent = `Download redacted ${format.toUpperCase()}`;
+          downloads.replaceChildren(link); message.textContent = 'File ready. Inspect the downloaded copy before sharing; detection can miss information.';
+        } catch (error) {
+          if (versions.get(root) === version && editVersion === edit) message.textContent = error.name === 'AbortError' ? 'Export cancelled or timed out.' : error.message;
+        } finally { clearTimeout(timer); if (request === current) { request = null; update(); } }
+      });
+      panel.append(button);
+    }
+    if (!enabled) message.textContent = 'Export blocked: complete OCR and vision review first, then rescan. Export authorization expires after 15 minutes.';
+    panel.append(message,downloads); root.append(panel); listMasks(); update();
   }
   return {render, clear, validBox, label};
 })();

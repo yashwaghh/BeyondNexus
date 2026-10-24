@@ -132,6 +132,43 @@ async function startServer(origin, port = 0) {
     assert.equal(await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     console.log('PASS: real extension file upload, aligned visible box, unlocated finding and annotated download.');
 
+
+    // Exercise the actual redaction editor, binary export endpoint and download.
+    assert.equal(await panel.locator('.export-png').isDisabled(), true);
+    await panel.locator('.masked-toggle').check();
+    await panel.locator('.export-reviewed').check();
+    await panel.locator('.export-png').click();
+    await panel.locator('.redacted-download').waitFor();
+    const redactedPixels = await panel.evaluate(async () => {
+      const blob = await (await fetch(document.querySelector('.redacted-download').href)).blob();
+      const image = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas'); canvas.width=image.width; canvas.height=image.height;
+      const ctx=canvas.getContext('2d'); ctx.drawImage(image,0,0);
+      return [...ctx.getImageData(100,300,1,1).data];
+    });
+    assert.deepEqual(redactedPixels, [0,0,0,255]);
+    const redactedReceived = panel.waitForEvent('download'); await panel.locator('.redacted-download').click();
+    const redactedFile = await redactedReceived;
+    assert.equal(redactedFile.suggestedFilename(), 'privacygate-redacted.png');
+    await redactedFile.saveAs(path.join(root,'reports/redacted-example.png')); await redactedFile.delete();
+    await panel.locator('.mask-list button').first().click();
+    assert.equal(await panel.locator('.export-reviewed').isChecked(), false);
+    assert.equal(await panel.locator('.redacted-download').count(), 0);
+    const bounds = await panel.locator('canvas').boundingBox();
+    await panel.mouse.move(bounds.x+bounds.width*.1,bounds.y+bounds.height*.5);
+    await panel.mouse.down(); await panel.mouse.move(bounds.x+bounds.width*.85,bounds.y+bounds.height*.65); await panel.mouse.up();
+    assert.equal(await panel.locator('.mask-list li').count(), 1);
+    assert.equal(await panel.locator('.export-png').isDisabled(), true);
+    await panel.locator('.export-reviewed').check();
+    await panel.locator('.export-pdf').click(); await panel.locator('.redacted-download').waitFor();
+    await panel.screenshot({path:path.join(root,'reports/redaction-editor.png'),fullPage:true});
+    await panel.locator('.mask-page').click();
+    assert.equal(await panel.locator('.export-reviewed').isChecked(), false);
+    assert.equal(await panel.locator('.mask-list li').count(), 2);
+    await panel.locator('#source').fill('changed input');
+    assert.equal(await panel.locator('.redacted-download').count(),0);
+    console.log('PASS: edited masks, destructive PNG pixels, approved PDF export and stale-download invalidation.');
+
     const ui = await context.newPage(); await ui.goto(server.address);
     ui.on('pageerror', error => errors.push(error.message));
     await ui.locator('#upload').setInputFiles({name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from(image, 'base64')});
@@ -152,6 +189,13 @@ async function startServer(origin, port = 0) {
     await ui.waitForFunction(() => document.querySelectorAll('.preview-download').length === 2);
     assert.equal(await ui.locator('canvas').count(), 2);
     await ui.screenshot({path: path.join(root, 'reports/pdf-boxes.png'), fullPage: true});
+    await ui.locator('.masked-toggle').check(); await ui.locator('.export-reviewed').check();
+    await ui.locator('.export-pdf').click(); await ui.locator('.redacted-download').waitFor();
+    const pdfReceived = ui.waitForEvent('download'); await ui.locator('.redacted-download').click();
+    const pdfFile = await pdfReceived; await pdfFile.saveAs(path.join(root,'reports/redacted-two-pages.pdf')); await pdfFile.delete();
+    const verified = spawnSync(process.env.PYTHON || 'python', ['-c',
+      "from pypdf import PdfReader; import pypdfium2 as p; r=PdfReader('reports/redacted-two-pages.pdf'); assert len(r.pages)==2; assert not any(x.extract_text() for x in r.pages); assert r.metadata is None; d=p.PdfDocument('reports/redacted-two-pages.pdf'); d[0].render().to_pil().save('reports/redacted-pdf-page.png')"], {cwd:root,encoding:'utf8'});
+    assert.equal(verified.status,0,verified.stderr);
     console.log('PASS: two rendered PDF pages with per-page boxes; actual annotated PNG download works.');
     assert.deepEqual(errors, []); assert.deepEqual(outbound, []);
     console.log('PASS: local UI annotated preview; no page errors or unexpected test requests.');

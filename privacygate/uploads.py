@@ -204,7 +204,7 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
 
     warnings_out = [
         'Vision and text extraction can miss personal information; inspect every page or image manually.',
-        'No redacted image or PDF is produced in this iteration; findings are review guidance only.',
+        'Detected boxes are suggestions. Review and edit masks before preparing a redacted export; missed information can remain.',
     ]
     findings: list[dict] = []
     sanitized_text: str | None = None

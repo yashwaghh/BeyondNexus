@@ -93,7 +93,15 @@ scanFileButton.addEventListener('click', async () => {
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || 'Local file review failed');
-    if (revision === version) renderResult(body);
+    if (revision === version) renderResult(body, async (edits, signal) => {
+      const response = await fetch('/v1/redact-export', {
+        method: 'POST', signal,
+        headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
+        body: JSON.stringify({...edits, data_base64:dataBase64, media_type:file.type, export_ticket:body.export_ticket})
+      });
+      if (!response.ok) throw new Error('Export failed. Rescan if the 15-minute review authorization expired.');
+      return response.blob();
+    });
   } catch (error) {
     if (revision === version) showError(error.message);
   } finally {
@@ -119,9 +127,9 @@ function showError(message) {
   findingList.replaceChildren();
 }
 
-function renderResult(body) {
+function renderResult(body, exportFile) {
   latest = body;
-  result.value = body.sanitized_text || 'No sanitized file export is produced. Review the findings and original image/page locally.';
+  result.value = body.sanitized_text || 'Review and edit the file masks below, then prepare a redacted export.';
   statusNode.textContent = body.status.replaceAll('_', ' ');
   statusNode.className = `status ${body.status.toLowerCase()}`;
   const counts = body.findings.reduce((map, finding) => {
@@ -145,7 +153,7 @@ function renderResult(body) {
   reviewed.checked = false;
   reviewed.disabled = body.status === 'BLOCKED_UNVERIFIED' || !body.sanitized_text || body.export_available === false;
   copyButton.disabled = true;
-  if (body.export_available === false) PrivacyGatePreview.render(preview, body);
+  if (body.export_available === false) PrivacyGatePreview.render(preview, body, {exportFile});
   else PrivacyGatePreview.clear(preview);
 }
 
