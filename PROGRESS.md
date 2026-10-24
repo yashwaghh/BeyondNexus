@@ -238,3 +238,5 @@
 - 2026-10-24T20:03:32+00:00 | Validation agent | PASS | files=47/47, tests=81; live text/vision model and external integrations unverified.
 
 - Final local gates: 81 Python tests, 47 required files and 20 extension unit tests PASS. Five targeted export stability runs and the repeated full validator pass; intermittent prior auth rejection failure did not reproduce. Expanded installed browser integration verifies explicit PNG/PDF assignment, exact bytes, changed URL invalidation, duplicate picker fallback, synthetic bridge connectivity, approval/cancellation and file export. No authenticated ChatGPT/cloud upload acceptance claim.
+
+- Fresh integration CI verified: f60dd19, https://github.com/yashwaghh/BeyondNexus/actions/runs/40128148479 - completed success. macOS arm64 Python 3.10/3.13 and Ubuntu installed-extension Chromium browser smoke all PASS. Synthetic PNG/PDF file assignment is automated; actual authenticated ChatGPT cloud upload acceptance and live target-Mac Gemma remain pending. Packaged v0.5.0 contains 11 runtime/docs files and adds no permissions.
