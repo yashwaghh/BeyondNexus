@@ -49,8 +49,9 @@ function chatgptAttachment(action, expectedUrl, payload) {
   if (candidates.length > 1 && editors[0]) {
     let parent = editors[0].parentElement;
     while (parent && parent !== document.body) {
-      const match = candidates.find(node => typeof parent.contains === 'function' && parent.contains(node));
-      if (match) { candidates = [match]; break; }
+      const matches = candidates.filter(node => typeof parent.contains === 'function' && parent.contains(node));
+      if (matches.length === 1) { candidates = matches; break; }
+      if (matches.length > 1) break;
       parent = parent.parentElement;
     }
   }

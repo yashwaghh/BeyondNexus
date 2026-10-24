@@ -27,6 +27,7 @@ function panel(fetcher) {
   vm.runInContext(source('popup.js'), context);
   node('#source').value = 'synthetic text'; node('#mode').value = 'off';
   return {node, chrome, copies: () => copies,
+    attach: (...args) => context.attachRedacted(...args),
     fire: (id, event = 'click') => node(id).events[event]()};
 }
 const reply = status => ({ok: true, json: async () => ({status, sanitized_text: '[PERSON_1]', findings: [], warnings: []})});
@@ -175,7 +176,7 @@ function attachmentScenario({origin='https://chatgpt.com',url='https://chatgpt.c
   const context=vm.createContext({location:{origin,href:url},document:{querySelectorAll:selector=>selector==='#prompt-textarea'?[editor]:inputs},
     File:SyntheticFile,DataTransfer:Transfer,Uint8Array,atob,Event:class {constructor(type){this.type=type;}}});
   vm.runInContext(source('attachment.js'),context);
-  return {inputs,events,call:(action,expected,payload)=>context.chatgptAttachment(action,expected,payload)};
+  return {inputs,editor,events,call:(action,expected,payload)=>context.chatgptAttachment(action,expected,payload)};
 }
 const syntheticPNG=Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64');
 test('attachment hands only explicit generated file to picker and never dispatches submit',()=>{
@@ -221,4 +222,23 @@ test('attachment prefers a unique image-specific picker over a general file pick
   assert.equal(picker.ready,true);assert.ok(picker.fingerprint.includes('image/*'));
   const result=page.call('attach','https://chatgpt.com/',{type:'image/png',base64:syntheticPNG,fingerprint:picker.fingerprint});
   assert.equal(result.assigned,true);assert.equal(page.inputs[0].files.length,1);assert.equal(page.inputs[1].files.length,0);
+});
+
+test('attachment rejects two equally compatible pickers in the same composer ancestor',()=>{
+  const page=attachmentScenario({count:2});
+  page.editor.parentElement={contains:node=>page.inputs.includes(node),parentElement:null};
+  assert.ok(page.call('inspect','https://chatgpt.com/',{type:'image/png'}).error);
+  assert.equal(page.events.length,0);
+});
+
+test('attachment controller rejects a different active ChatGPT tab or changed conversation',async()=>{
+  for (const changed of ['tab','conversation']) {
+    const p=panel(async()=>reply('REVIEW_REQUIRED'));
+    let injections=0;
+    p.chrome.scripting.executeScript=async()=>{injections++;return [{result:{ready:true}}];};
+    if(changed==='tab') p.chrome.tabs.query=async()=>[{id:2,url:'https://chatgpt.com/'}];
+    else p.chrome.tabs.get=async()=>({id:1,url:'https://chatgpt.com/c/other'});
+    await assert.rejects(p.attach({size:10,type:'image/png'},'png',{aborted:false},{id:1,url:'https://chatgpt.com/'}),/changed/);
+    assert.equal(injections,0);
+  }
 });

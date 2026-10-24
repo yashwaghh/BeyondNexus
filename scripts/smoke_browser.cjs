@@ -38,10 +38,17 @@ async function startServer(origin, port = 0) {
     context.setDefaultTimeout(20000);
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', {timeout: 20000});
     const id = new URL(worker.url()).host;
-    server = await startServer(`chrome-extension://${id}`, 8765);
+    server = await startServer(`chrome-extension://${id}`);
+    // Keep the extension's fixed URL, but isolate synthetic requests from any
+    // developer bridge already listening on 8765 (including on Windows).
+    await context.route('http://127.0.0.1:8765/**', async route => {
+      const response = await route.fetch({url:server.address + new URL(route.request().url()).pathname});
+      await route.fulfill({response});
+    });
     const errors = [], outbound = [];
     context.on('request', request => {
       if (/^https?:/.test(request.url()) && !request.url().startsWith(server.address)
+          && !request.url().startsWith('http://127.0.0.1:8765/')
           && !request.url().startsWith('https://chatgpt.com/')) outbound.push(request.url());
     });
     const panel = await context.newPage();
@@ -50,7 +57,8 @@ async function startServer(origin, port = 0) {
     await panel.locator('#token').fill(token);
     await panel.locator('#save').click();
     await panel.locator('#test').click();
-    await panel.waitForFunction(() => document.querySelector('#message').textContent.startsWith('Connected:'));
+    await panel.waitForFunction(() => document.querySelector('#message').textContent.startsWith('Connected:'))
+      .catch(async error => { throw new Error(`Synthetic bridge check failed: ${await panel.locator('#message').innerText()}`, {cause:error}); });
     await panel.goto(`chrome-extension://${id}/popup.html`);
     await panel.locator('#check-bridge').click();
     await panel.waitForFunction(() => document.querySelector('#connection-status').textContent.startsWith('Connected:'));
@@ -240,6 +248,24 @@ async function startServer(origin, port = 0) {
     await panel.waitForFunction(()=>!document.querySelector('.redacted-download'));
     assert.equal(await chat.evaluate(()=>window.uploaded.length),2);
     console.log('PASS: explicit PNG/PDF attachment transfers exact generated redacted bytes; duplicate pickers and changed conversations block; no auto-upload or Send.');
+
+    // Preserve the new one-click generate-and-attach flow with the same approval gates.
+    await chat.evaluate(()=>document.querySelector('#ambiguous-picker').remove());
+    await panel.evaluate(()=>document.querySelector('#scan-file').click());
+    await panel.locator('.masked-toggle').waitFor();
+    await panel.evaluate(()=>{
+      for(const selector of ['.masked-toggle','.export-reviewed']) {
+        const node=document.querySelector(selector);node.checked=true;node.dispatchEvent(new Event('change'));
+      }
+    });
+    assert.equal(await panel.locator('.redacted-download').count(),0);
+    assert.equal(await chat.evaluate(()=>window.uploaded.length),2);
+    await panel.evaluate(()=>document.querySelector('.attach-redacted').click());
+    await chat.waitForFunction(()=>window.uploaded.length===3);
+    const generated=await panel.evaluate(async()=>[...new Uint8Array(await(await fetch(document.querySelector('.redacted-download').href)).arrayBuffer())]);
+    assert.deepEqual(await chat.evaluate(()=>window.uploaded[2].bytes),generated);
+    assert.equal(await chat.evaluate(()=>window.sent),0);
+    console.log('PASS: one-click Attach generates and transfers only the approved redacted export.');
 
     const ui = await context.newPage(); await ui.goto(server.address);
     ui.on('pageerror', error => errors.push(error.message));

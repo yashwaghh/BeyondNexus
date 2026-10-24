@@ -113,6 +113,7 @@ globalThis.PrivacyGatePreview = (() => {
     approvalLabel.append(approval, ' I inspected every masked page and covered missed or unlocated personal information.');
     const list = document.createElement('ul'); list.className = 'mask-list';
     const message = document.createElement('p'); message.setAttribute('role', 'status');
+    const guidance = document.createElement('p'); guidance.className = 'export-guidance';
     const downloads = document.createElement('div');
     const buttons = [];
     let regions = body.findings.filter(f => f.page && validBox(f.region_0_1000))
@@ -132,10 +133,11 @@ globalThis.PrivacyGatePreview = (() => {
     function update() {
       undo.disabled = !history.length;
       attach.disabled = attached || !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
-      if (regions.length > 500) message.textContent = 'Too many masks (maximum 500). Use Mask whole page to replace that page\'s masks, or remove excess masks.';
-      else if (!toggle.checked) message.textContent = 'Enable "Show masked preview" to review and export.';
-      else if (!approval.checked) message.textContent = 'Tick "I inspected every masked page..." above to enable export.';
-      else if (!prepared && !request) message.textContent = 'Click "Prepare redacted PNG/PDF" to download, or click "Attach" to upload to ChatGPT.';
+      guidance.textContent = '';
+      if (regions.length > 500) guidance.textContent = 'Too many masks (maximum 500). Use Mask whole page to replace that page\'s masks, or remove excess masks.';
+      else if (!toggle.checked) guidance.textContent = 'Enable "Show masked preview" to review and export.';
+      else if (!approval.checked) guidance.textContent = 'Tick "I inspected every masked page..." above to enable export.';
+      else if (!prepared && !request) guidance.textContent = 'Click "Prepare redacted PNG/PDF" to download, or click "Attach" to upload to ChatGPT.';
       for (const button of buttons) button.disabled = !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
     }
     function draw() {
@@ -277,7 +279,7 @@ globalThis.PrivacyGatePreview = (() => {
       panel.append(sharing, attach);
     }
     if (!enabled) message.textContent = 'Export blocked: complete OCR and vision review first, then rescan. Export authorization expires after 15 minutes.';
-    panel.append(message,downloads); root.append(panel); listMasks(); update();
+    panel.append(guidance,message,downloads); root.append(panel); listMasks(); update();
     setTimeout(() => panel?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 30);
   }
   return {render, clear, validBox, label};

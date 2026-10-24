@@ -215,8 +215,7 @@ function setMessage(text, error = false) { $('#message').textContent = text; $('
 resetApproval();
 
 async function attachRedacted(blob, format, signal, intended) {
-  const [active] = await chrome.tabs.query({active:true,currentWindow:true});
-  const target = (active?.url && new URL(active.url).origin === 'https://chatgpt.com') ? active : intended;
+  const target = intended;
   if (!target?.url || new URL(target.url).origin !== 'https://chatgpt.com')
     throw new Error('Open your intended ChatGPT conversation and keep it active, then click Attach.');
   if (!blob.size || blob.size > 10*1024*1024 || blob.type !== (format === 'png' ? 'image/png' : 'application/pdf'))
@@ -224,8 +223,9 @@ async function attachRedacted(blob, format, signal, intended) {
   async function verifyTarget() {
     if (signal.aborted) throw new Error('Attachment cancelled.');
     const [current] = await chrome.tabs.query({active:true,currentWindow:true});
-    if (!current?.url || new URL(current.url).origin !== 'https://chatgpt.com')
-      throw new Error('ChatGPT tab changed. Keep the ChatGPT tab active while attaching.');
+    const tab = await chrome.tabs.get(target.id);
+    if (current?.id !== target.id || tab.url !== target.url)
+      throw new Error('ChatGPT tab or conversation changed. Review the file again in the intended tab.');
     if (signal.aborted) throw new Error('Attachment cancelled.');
   }
   await verifyTarget();
