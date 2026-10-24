@@ -19,6 +19,7 @@ def _line(ok: bool, label: str, detail: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check macOS and local Gemma fallback readiness")
+    parser.add_argument("--uploads", action="store_true", help="Also require local OCR engine and configured languages")
     parser.add_argument("--smoke", action="store_true",
                         help="Run one synthetic end-to-end contextual span test")
     parser.add_argument("--timeout", type=float, default=8.0,
@@ -34,6 +35,19 @@ def main() -> int:
     lms_path = shutil.which("lms")
     print(f"[{'PASS' if lms_path else 'WARN'}] LM Studio CLI: "
           f"{'available' if lms_path else 'not on PATH; the LM Studio app can still start the server'}")
+
+    if args.uploads:
+        import io
+        from PIL import Image
+        from .ocr import TesseractOCR, OCRError
+        buffer = io.BytesIO()
+        Image.new('RGB', (100, 100), 'white').save(buffer, format='PNG')
+        try:
+            TesseractOCR().recognize(buffer.getvalue())
+            _line(True, "Local OCR", "Tesseract and configured language data available")
+        except OCRError:
+            _line(False, "Local OCR", "install Tesseract and configured language data; see ITERATION_3.md")
+            return 1
 
     try:
         client = GemmaLocalClient(

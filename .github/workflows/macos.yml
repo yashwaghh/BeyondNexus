@@ -30,6 +30,10 @@ jobs:
           privacygate --help
           privacygate-ui --help
           privacygate-check-mac --help
+      - name: Install local OCR
+        run: brew install tesseract
+      - name: Benchmark synthetic OCR detection and localization
+        run: python scripts/benchmark_uploads.py --require-perfect
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Run iteration validator

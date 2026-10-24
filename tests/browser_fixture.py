@@ -5,6 +5,12 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from privacygate.model import VisionFinding
+from privacygate.ocr import OCRPage
+
+class SyntheticOCR:
+    def recognize(self, _png):
+        return OCRPage("", [], 900, 600)
+
 from privacygate.web import create_server
 
 class SyntheticVision:
@@ -16,6 +22,6 @@ if __name__ == '__main__':
     server = create_server(port=int(sys.argv[2]) if len(sys.argv) > 2 else 0,
                            token='synthetic-browser-token-1234567890',
                            extension_origin=sys.argv[1] if len(sys.argv) > 1 else None,
-                           model=SyntheticVision())
+                           model=SyntheticVision(), ocr=SyntheticOCR())
     print(json.dumps({'origin': server.local_origin}), flush=True)
     server.serve_forever()

@@ -14,6 +14,7 @@ from pypdf import PdfReader
 from .detectors import detect_rules
 from .model import GemmaLocalClient, LocalModelError, VisionFinding
 from .pipeline import HIGH_THRESHOLD, sanitize
+from .ocr import TesseractOCR, OCRError
 
 MAX_UPLOAD_BYTES = 6 * 1024 * 1024
 MAX_PDF_PAGES = 5
@@ -38,6 +39,9 @@ class UploadReviewResult:
     vision_attempted: bool
     vision_succeeded: bool
     warnings: list[str]
+    ocr_attempted: bool = True
+    ocr_succeeded: bool = False
+    ocr_pages: list[dict] = field(default_factory=list)
     export_available: bool = False
     preview_pages: list[dict] = field(default_factory=list)
 
@@ -160,9 +164,35 @@ def _vision_metadata(finding: VisionFinding, page: int) -> dict:
     }
 
 
+def combine_findings(findings: list[dict]) -> list[dict]:
+    """Combine strong same-type spatial agreement; preserve disagreements/unlocated evidence."""
+    combined = []
+    for finding in findings:
+        candidate = dict(finding)
+        candidate['evidence_sources'] = [finding['source']]
+        box = finding.get('region_0_1000')
+        match = None
+        if box:
+            for previous in combined:
+                other = previous.get('region_0_1000')
+                if not other or previous['page'] != finding['page'] or previous['entity'] != finding['entity']:
+                    continue
+                intersection = max(0, min(box[2], other[2])-max(box[0], other[0])) * max(0, min(box[3], other[3])-max(box[1], other[1]))
+                union = (box[2]-box[0])*(box[3]-box[1]) + (other[2]-other[0])*(other[3]-other[1]) - intersection
+                if union and intersection / union >= .5:
+                    match = previous
+                    break
+        if match is None:
+            combined.append(candidate)
+        elif finding['source'] not in match['evidence_sources']:
+            match['evidence_sources'].append(finding['source'])
+            # Never average model and OCR scores into a fabricated safety probability.
+    return combined
+
+
 def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
                   model: GemmaLocalClient | None = None,
-                  include_previews: bool = False) -> UploadReviewResult:
+                  include_previews: bool = False, ocr=None) -> UploadReviewResult:
     if media_type not in SUPPORTED_UPLOAD_TYPES:
         raise UploadReviewError('Only PNG, JPEG, WebP, and PDF uploads are supported.')
     if vision_mode not in {'off', 'always'}:
@@ -208,6 +238,22 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
     else:
         rendered_pages = [_normalized_png(data)]
 
+    ocr_engine = ocr if ocr is not None else TesseractOCR()
+    ocr_pages = []
+    ocr_succeeded = True
+    for page_number, page_png in enumerate(rendered_pages, start=1):
+        try:
+            page_ocr = ocr_engine.recognize(page_png)
+            ocr_pages.append(page_ocr.summary(page_number))
+            findings.extend(page_ocr.findings(page_number))
+        except OCRError:
+            ocr_succeeded = False
+            ocr_pages.append({'page': page_number, 'failed': True, 'uncertain': True})
+    if not ocr_succeeded:
+        warnings_out.append('Local OCR failed or is unavailable on one or more pages; install Tesseract and configured language data. Upload remains blocked/unverified.')
+    elif any(page['uncertain'] for page in ocr_pages):
+        warnings_out.append('OCR found low-confidence words or no readable words; inspect those pages manually. OCR confidence does not measure privacy safety.')
+
     vision_attempted = vision_mode == 'always'
     vision_succeeded = False
     if vision_mode == 'off':
@@ -223,9 +269,9 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
         except LocalModelError:
             warnings_out.append('Local Gemma vision analysis failed or returned invalid output.')
 
-    if vision_mode != 'always' or not vision_succeeded:
+    if vision_mode != 'always' or not vision_succeeded or not ocr_succeeded:
         status = 'BLOCKED_UNVERIFIED'
-    elif findings:
+    elif findings or any(page['uncertain'] for page in ocr_pages):
         status = 'REVIEW_REQUIRED'
     else:
         status = 'READY_FOR_MANUAL_APPROVAL'
@@ -235,9 +281,11 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
         media_type=media_type,
         page_count=len(rendered_pages),
         sanitized_text=sanitized_text,
-        findings=findings,
+        findings=combine_findings(findings),
         status=status,
         requires_human_review=True,
+        ocr_succeeded=ocr_succeeded,
+        ocr_pages=ocr_pages,
         vision_attempted=vision_attempted,
         vision_succeeded=vision_succeeded,
         warnings=warnings_out,

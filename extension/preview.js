@@ -19,8 +19,13 @@ globalThis.PrivacyGatePreview = (() => {
     const version = versions.get(root);
     const heading = document.createElement('h3'); heading.textContent = 'Suspicious information preview';
     const note = document.createElement('p');
-    note.textContent = 'Boxes show approximate model locations, not verified identity types. This is NOT redaction: all original visible information remains. Missing boxes do not mean a page is safe.';
+    note.textContent = 'Boxes show approximate OCR/rule or model locations, not verified identity types. This is NOT redaction: all original visible information remains. Missing boxes do not mean a page is safe.';
     root.append(heading, note);
+    for (const page of body.ocr_pages || []) {
+      const quality = document.createElement('p');
+      quality.textContent = `Page ${page.page} OCR: ${page.failed ? 'failed - upload unverified' : `${page.word_count} words, mean recognition confidence ${page.mean_confidence ?? 'unavailable'}/100`}. ${page.uncertain ? 'Low-confidence or unreadable content needs manual inspection.' : 'Recognition confidence is not a privacy safety score.'}`;
+      root.append(quality);
+    }
     const pages = body.preview_pages || [];
     if (!pages.length) {
       const message = document.createElement('p'); message.textContent = 'No visual preview was returned. Review the original locally.';
@@ -48,7 +53,7 @@ globalThis.PrivacyGatePreview = (() => {
       const legend = document.createElement('ul');
       for (const f of items) {
         const item = document.createElement('li');
-        item.textContent = `#${f.number} ${label(f)} · model suggestion; verify this region yourself.`;
+        item.textContent = `#${f.number} ${label(f)} · ${(f.evidence_sources || [f.source]).join(' + ')}${typeof f.ocr_confidence === 'number' ? ` / OCR confidence ${f.ocr_confidence.toFixed(1)}/100` : ''}; verify this region yourself.`;
         legend.append(item);
       }
       const message = document.createElement('p');

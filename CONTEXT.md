@@ -79,3 +79,6 @@ V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED
 - Chrome MV3 is the selected first target; supported-site evidence and store/distribution approach remain open.
 - What Hindi/Marathi detection accuracy can we demonstrate? Not established.
 - Mac synthetic image/PDF vision smoke passed (30.23s image, 37.77s one-page PDF), including regions. Recall, localization quality, memory pressure and 1-5-page latency remain unbenchmarked.
+
+## Iteration 3 accepted scope (2026-10-25)
+Local OCR + rules + Gemma vision with detection/localization benchmarks. OCR is required for upload verification; missing OCR blocks uploads. Every page still receives vision regardless of OCR confidence. See ITERATION_3.md; native target-Mac combined quality remains pending.

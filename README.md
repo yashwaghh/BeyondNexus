@@ -128,3 +128,6 @@ English-centric deterministic heuristics; image/PDF vision is unbenchmarked; no 
 ## Licensing
 
 Project code: MIT. Gemma 4 weights are **not bundled** and are licensed separately by Google (Gemma 4 Apache 2.0); see official model card. Product uses LM Studio as a user-provided local runtime. Never commit private samples, real prompts or secrets.
+
+## Iteration 3: OCR + rules + Gemma uploads
+Uploads now require local Tesseract as well as Gemma vision. On Mac, install with `brew install tesseract`, then run `python -m privacygate.macos_check --uploads --smoke --timeout 75`. See [ITERATION_3.md](ITERATION_3.md) for setup, benchmark commands, confidence semantics and pending hardware checks. Reload the extension after updating. Missing OCR blocks uploads rather than reporting a completed scan.

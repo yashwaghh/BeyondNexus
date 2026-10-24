@@ -1,6 +1,8 @@
 import io
 import base64
 import unittest
+from unittest.mock import patch
+from privacygate.ocr import OCRPage
 
 from PIL import Image
 from pypdf import PdfWriter
@@ -66,6 +68,11 @@ class BrokenVision:
 
 
 class UploadReviewTests(unittest.TestCase):
+    def setUp(self):
+        stub = patch("privacygate.uploads.TesseractOCR")
+        self.addCleanup(stub.stop)
+        stub.start().return_value.recognize.return_value = OCRPage("", [], 96, 64)
+
     def test_preview_is_opt_in_and_uses_exact_model_pixels(self):
         model = FakeVision()
         self.assertEqual(review_upload(make_png(), 'image/png', model=model).preview_pages, [])

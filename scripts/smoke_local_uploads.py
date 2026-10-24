@@ -52,11 +52,12 @@ def run_case(label: str, data: bytes, media_type: str, model: GemmaLocalClient) 
     started = time.perf_counter()
     result = review_upload(data, media_type, model=model)
     vision_kinds = sorted({finding['entity'] for finding in result.findings
-                           if finding['source'] == 'gemma_vision'})
+                           if 'gemma_vision' in finding.get('evidence_sources', [finding['source']])})
     elapsed = time.perf_counter() - started
     print(f'{label}: status={result.status}, vision_succeeded={result.vision_succeeded}, '
-          f'vision_labels={vision_kinds}, elapsed_seconds={elapsed:.2f}')
-    return result.vision_succeeded and bool(vision_kinds)
+          f'ocr_succeeded={result.ocr_succeeded}, vision_labels={vision_kinds}, elapsed_seconds={elapsed:.2f}')
+    return (result.vision_succeeded and result.ocr_succeeded and bool(vision_kinds)
+            and any(f['entity'] == 'EMAIL' for f in result.findings))
 
 
 def main() -> int:

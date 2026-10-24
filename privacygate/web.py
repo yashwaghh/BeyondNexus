@@ -33,11 +33,12 @@ class PrivacyGateServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, server_address, handler, *, token: str, extension_origin: str | None,
-                 model: GemmaLocalClient | None):
+                 model: GemmaLocalClient | None, ocr=None):
         super().__init__(server_address, handler)
         self.token = token
         self.extension_origin = extension_origin
         self.model = model
+        self.ocr = ocr
         self.scan_slots = threading.BoundedSemaphore(2)
 
     @property
@@ -166,7 +167,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
                     except (binascii.Error, ValueError):
                         raise ValueError from None
                     result = review_upload(upload, media_type, vision_mode=vision_mode,
-                                           model=self.server.model, include_previews=include_previews)
+                                           model=self.server.model, include_previews=include_previews, ocr=self.server.ocr)
             finally:
                 self.server.scan_slots.release()
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, UploadReviewError):
@@ -177,7 +178,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
 
 def create_server(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, token: str,
                   extension_origin: str | None = None,
-                  model: GemmaLocalClient | None = None) -> PrivacyGateServer:
+                  model: GemmaLocalClient | None = None, ocr=None) -> PrivacyGateServer:
     if host != DEFAULT_HOST:
         raise ValueError("PrivacyGate UI must bind to 127.0.0.1")
     if not token or len(token) < 24:
@@ -190,7 +191,7 @@ def create_server(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, token: 
             raise ValueError("Extension origin must look like chrome-extension://<extension-id>")
         extension_origin = extension_origin.rstrip("/")
     return PrivacyGateServer((host, port), PrivacyGateHandler, token=token,
-                             extension_origin=extension_origin, model=model)
+                             extension_origin=extension_origin, model=model, ocr=ocr)
 
 
 def main() -> int:

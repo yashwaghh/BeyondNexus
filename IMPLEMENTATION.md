@@ -250,3 +250,6 @@ python scripts/smoke_local_model.py      # requires running LM Studio; outputs o
 ```
 
 `smoke_local_model.py` must run on the developer's Mac with Gemma E2B loaded. A pass there only verifies one contextual demonstration, not reliability across formats. The benchmark includes an expected failure for names in regex-only mode to make this limitation visible.
+
+## Iteration 3 implementation supplement
+See ITERATION_3.md for the accepted OCR pipeline, separate recognition/rule confidence, evidence grouping, failure states, benchmark definitions and target-Mac acceptance commands. Earlier iteration-two descriptions without OCR are historical.

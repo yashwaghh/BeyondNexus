@@ -181,3 +181,15 @@
 - Next action: visually check the updated boxes on the target Mac with synthetic documents and verify the reloaded v0.3.0 extension in the user's normal ChatGPT browser. No need to repeat initial model setup if the running configuration is unchanged.
 
 - 2026-10-24T17:42:45+00:00 | Validation agent | PASS | files=39/39, tests=53; live text/vision model and external integrations unverified.
+
+### 2026-10-25 IST - Iteration 3 - OCR + rules + Gemma
+- Accepted user scope: improve detection with OCR/rules/vision and benchmarks; do not skip vision based on OCR confidence.
+- Implemented local Tesseract stdin/TSV adapter, exact-offset OCR rule boxes, per-page recognition summaries, separate OCR confidence, low-confidence/blank-page review, missing/failed OCR blocking and continued all-page vision. OCR transcripts stay internal.
+- Strong same-type spatial agreement combines provenance; conflicting/unlocated evidence remains visible. UI and extension show sources and OCR quality; no file redaction or automatic sending.
+- Added synthetic clean/blurred detection/localization benchmark, stricter live upload smoke, optional Mac OCR preflight, Mac CI native OCR gate and setup/handoff docs in ITERATION_3.md.
+- Validation in progress: 66 Python tests pass; installed Edge extension + bridge/browser integration passes with synthetic OCR/model/page fixtures. Native Windows Tesseract is absent: real benchmark correctly exits 2 BLOCKED_UNVERIFIED. No native OCR accuracy or new target-Mac Gemma performance claim.
+- Next action: final validator/browser rerun, push; target Mac must run native benchmark + live combined benchmark and visually inspect synthetic scanned-PDF boxes.
+
+- 2026-10-24T19:31:32+00:00 | Validation agent | PASS | files=43/43, tests=66; live text/vision model and external integrations unverified.
+
+- Final iteration-three local gate: validator PASS, 43/43 files, 66 Python tests, rule benchmark/CLI checks; 12 extension tests PASS. Installed Edge browser smoke rerun PASS; updated side-panel screenshot inspected. Native upload benchmark explicitly BLOCKED_UNVERIFIED (Tesseract unavailable), not counted as a passing accuracy test. Mac CI and live OCR/Gemma metrics remain pending.

@@ -56,3 +56,6 @@
 - [ ] Known limitations appear in README and demo
 
 Status: implementation-oriented threat model; **not** a security audit or independent certification.
+
+## Iteration 3 OCR risks
+OCR can misread identifiers with high confidence or miss whole regions; recognition confidence is not a privacy probability and never bypasses vision. Default English does not establish multilingual coverage. Local Tesseract is an additional native parser/subprocess with a 30-second timeout; output/word limits are validated after capture, not OS-enforced memory isolation. No shell or application-created transcript/image files; transcripts stay internal and subprocess diagnostics are discarded. Executable/language environment configuration is trusted local configuration. Failure blocks uploads. Boxes, including OCR-derived boxes, remain review guidance and annotated exports retain original pixels.
