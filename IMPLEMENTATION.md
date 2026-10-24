@@ -256,3 +256,6 @@ See ITERATION_3.md for the accepted OCR pipeline, separate recognition/rule conf
 
 ## Reviewed redaction/export supplement
 REDACTION_EXPORT.md defines the implemented image/PDF export path and its acceptance tests. export_available=false on scan results still blocks text-copy/insertion; the separate export_ticket permits only reviewed file generation. Earlier no-file-export descriptions refer to previous iterations.
+
+## Conservative upload identifiers
+Upload OCR applies additional identifier-shape rules independently of text-only checksum detection. Unlabelled, invalid-checksum or OCR-confused 12-digit candidates and masked identifiers' visible final digits receive POSSIBLE_ID review boxes and default export masks. Spatial row reconstruction supplements OCR reading order. This deliberately trades some false positives for better protection; it cannot detect pixels OCR never recognized. See PROGRESS.md v0.5.1.

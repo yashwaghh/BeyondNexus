@@ -49,6 +49,9 @@ def samples():
              ('pan', 'PAN: ', 'ABCDE1234F', 'PAN'),
              ('phone', 'Mobile: ', '9876543210', 'PHONE'),
              ('aadhaar', 'Aadhaar: ', aadhaar, 'AADHAAR'),
+             ('aadhaar_grouped', '', ' '.join(aadhaar[i:i+4] for i in range(0,12,4)), 'AADHAAR'),
+             ('uncertain_identifier', '', '2345 6789 0123', 'POSSIBLE_ID'),
+             ('masked_identifier', '', 'XXXX XXXX 0123', 'POSSIBLE_ID'),
              ('benign', '', 'Meeting at 14:30 in room 42', None),
              ('blank', '', '', None)]
     for name, prefix, value, entity in cases:

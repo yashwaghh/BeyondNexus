@@ -2,7 +2,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from privacygate.ocr import OCRError, OCRPage, TesseractOCR, parse_tsv
 from privacygate.uploads import review_upload, combine_findings
@@ -40,6 +40,66 @@ class OCR:
 
 
 class OCRTests(unittest.TestCase):
+    def identifier_page(self, values, *, blocks=False):
+        tsv = HEADER
+        for index, value in enumerate(values):
+            block = index + 1 if blocks else 1
+            tsv += f'5\t1\t{block}\t1\t1\t{index+1}\t{100+index*130}\t100\t110\t40\t96\t{value}\n'
+        return parse_tsv(tsv, 1000, 500)
+
+    def test_unlabelled_bad_checksum_and_ocr_confusions_are_mask_candidates(self):
+        for groups in (['2345', '6789', '0123'], ['2345', '6789', 'O12S'],
+                       ['XXXX', 'XXXX', '0123'], ['2345–6789—0123']):
+            with self.subTest(groups=groups):
+                findings = self.identifier_page(groups).findings(1)
+                self.assertTrue(any(f['entity'] == 'POSSIBLE_ID' for f in findings))
+                self.assertTrue(any(f['region_0_1000'][1] == 100 for f in findings))
+                self.assertNotIn('2345', str(findings))
+
+    def test_spatial_groups_in_separate_ocr_blocks_all_receive_masks(self):
+        # Reading order interrupted by other card content.
+        tsv = HEADER
+        for index, (text, x, y) in enumerate([('2345',100,100), ('Government',100,200),
+                                              ('0123',360,100), ('6789',230,100)]):
+            tsv += f'5\t1\t{index+1}\t1\t1\t1\t{x}\t{y}\t110\t40\t96\t{text}\n'
+        findings = parse_tsv(tsv,1000,500).findings(1)
+        boxes = [f['region_0_1000'] for f in findings if f['entity'] == 'POSSIBLE_ID']
+        self.assertEqual(sorted(box[1] for box in boxes), [100,230,360])
+
+    def test_unrelated_dates_phone_and_long_reference_not_aadhaar_candidates(self):
+        for value in ('12/10/2026', '9876543210', '2345678901234567', 'BOSS', 'Room 1234'):
+            findings = self.identifier_page([value]).findings(1)
+            self.assertFalse(any(f['source'] == 'ocr:identifier-shape' for f in findings))
+
+    def test_wrapped_and_repeated_numbers_cover_every_group(self):
+        tsv = HEADER
+        for index, (value,x,y) in enumerate([('2345',100,100), ('6789',230,100),
+                                            ('0123',100,160), ('234567890123',100,250)]):
+            tsv += f'5\t1\t1\t1\t{y}\t{index+1}\t{x}\t{y}\t110\t40\t96\t{value}\n'
+        findings = parse_tsv(tsv,1000,500).findings(1)
+        boxes = [f['region_0_1000'] for f in findings if f['entity'] == 'POSSIBLE_ID']
+        self.assertIn([200,100,280,340], boxes)
+        self.assertIn([320,100,400,210], boxes)
+        self.assertIn([500,100,580,210], boxes)
+
+    def test_detected_identifier_masks_remove_all_digit_group_pixels(self):
+        from privacygate.redaction import redact_export
+        recognized = self.identifier_page(['2345','6789','O12S'], blocks=True)
+        findings = recognized.findings(1)
+        original = Image.new('RGB', (1000,500), 'white')
+        draw = ImageDraw.Draw(original)
+        for x, value in zip((100,230,360), ('2345','6789','O12S')):
+            draw.text((x,100), value, fill='black')
+        source = io.BytesIO(); original.save(source, format='PNG')
+        result = review_upload(source.getvalue(), 'image/png', model=Vision(), ocr=OCR(recognized))
+        self.assertEqual(result.status, 'REVIEW_REQUIRED')
+        regions = [{'page':f['page'], 'box':f['region_0_1000']} for f in findings]
+        exported, _ = redact_export(source.getvalue(), 'image/png', regions, 'png', reviewed=True)
+        with Image.open(io.BytesIO(exported)) as image:
+            for x in (100,230,360):
+                self.assertEqual(image.crop((x,100,x+110,140)).getextrema(), ((0,0),(0,0),(0,0)))
+            self.assertEqual(image.getpixel((900,400)), (255,255,255))
+
     def test_rule_box_and_confidence_have_separate_meanings(self):
         finding = page(42).findings(1)[0]
         self.assertEqual(finding['entity'], 'EMAIL')
