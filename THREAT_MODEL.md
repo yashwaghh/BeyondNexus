@@ -11,6 +11,8 @@
 | Local model requests | LM Studio loopback | Accidental LAN/cloud routing; model echoes sensitive text |
 | Sanitized draft | Stdout / future UI | Missed PII, unreviewed sharing |
 | Browser integration (prototype) | Extension and page | Host permissions, cross-origin leaks, external access, bypasses |
+| Image/PDF upload | Local process memory | Parser exploits, decompression bombs, hidden content, metadata/attachment leaks |
+| Rendered page sent to Gemma | LM Studio loopback | Model misses, hallucinated regions, prompt injection embedded in image |
 
 ## Attack and failure cases
 
@@ -27,6 +29,10 @@
 11. **Extension overreach:** avoid `all_urls`, broad webRequest interception and background collection. Prefer user-triggered permissions (`activeTab`) and review-before-insert.
 12. **Unicode confusion:** unusual scripts/normalized digits may bypass ASCII rules. Document which scripts are supported; add tests before claiming Indian-language coverage.
 13. **Overlapping models:** overlapping regex/model spans can mask more or less than intended; deterministic longest-match merge still needs evaluation.
+14. **Malicious upload:** malformed PDFs/images may target native parsers or exhaust resources. Current byte/page/pixel limits reduce but do not eliminate risk; public/untrusted deployment requires process isolation and OS resource limits.
+15. **Incomplete PDF view:** rendered pixels can omit hidden layers, prior revisions, attachment contents, JavaScript, metadata or stale form values. Structural warnings and no-export policy keep these files in manual review.
+16. **Unsafe visual redaction:** a bounding box or overlay can leave underlying pixels/text recoverable. Iteration two does not generate redacted files.
+17. **Vision hallucination/miss:** Gemma regions and entity labels are uncalibrated. Strict JSON validation prevents malformed data from being trusted, but cannot establish recall.
 
 ## Data retention policy (V1)
 

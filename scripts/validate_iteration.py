@@ -11,14 +11,17 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
-    'README.md', 'IMPLEMENTATION.md', 'INTEGRATION_DECISION.md', 'CONTEXT.md', 'AGENTS.md',
+    'README.md', 'IMPLEMENTATION.md', 'INTEGRATION_DECISION.md', 'ITERATION_2.md', 'CONTEXT.md', 'AGENTS.md',
     'PROGRESS.md', 'NEXT_ITERATION.md', 'THREAT_MODEL.md', '.env.example',
     '.gitignore', 'LICENSE', 'pyproject.toml',
     'privacygate/__main__.py', 'privacygate/detectors.py', 'privacygate/model.py',
     'privacygate/pipeline.py', 'privacygate/web.py', 'privacygate/ui/index.html',
     'privacygate/readiness.py', 'privacygate/macos_check.py',
+    'privacygate/uploads.py',
     'extension/manifest.json', 'extension/popup.js', 'extension/README.md',
-    'tests/test_detectors.py', 'tests/test_pipeline.py', 'tests/test_readiness.py', 'tests/test_web.py',
+    'tests/test_detectors.py', 'tests/test_pipeline.py', 'tests/test_readiness.py',
+    'tests/test_uploads.py', 'tests/test_web.py',
+    'scripts/smoke_local_uploads.py',
 ]
 
 
@@ -40,7 +43,7 @@ def main() -> int:
     cli_ok = cli.returncode == 2 and '[PAN_1]' in cli.stdout and '[EMAIL_1]' in cli.stdout
     # Never persist raw test output; only aggregate checks are reported.
     ok = not missing and test.returncode == 0 and benchmark.returncode == 0 and cli_ok
-    print('PrivacyGate Iteration 1 validation:', 'PASS' if ok else 'FAIL')
+    print('PrivacyGate local validation:', 'PASS' if ok else 'FAIL')
     print('Required files:', len(REQUIRED) - len(missing), '/', len(REQUIRED))
     if missing:
         print('Missing files:', ', '.join(missing))
@@ -48,13 +51,14 @@ def main() -> int:
     print('Benchmark script exit code:', benchmark.returncode)
     print('CLI fail-closed smoke:', 'PASS' if cli_ok else 'FAIL')
     print('LM Studio live E2B inference: NOT VERIFIED by this validator (run separately).')
+    print('Gemma image/PDF vision inference: NOT VERIFIED by this validator (run smoke_local_uploads.py on target Mac).')
     print('Real-world PII safety / false-negative rate: NOT CERTIFIED.')
     if args.record:
         stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
         with (ROOT / 'PROGRESS.md').open('a', encoding='utf-8') as handle:
             handle.write(f'\n- {stamp} | Validation agent | {"PASS" if ok else "FAIL"} | '
                          f'files={len(REQUIRED)-len(missing)}/{len(REQUIRED)}, tests={test_count}; '
-                         'live local model and external integrations unverified.\n')
+                         'live text/vision model and external integrations unverified.\n')
     return 0 if ok else 1
 
 

@@ -19,6 +19,19 @@
 - [x] Add a macOS/Apple Silicon Gemma fallback readiness command and synthetic smoke option.
 - [x] Add Apple Silicon GitHub Actions coverage for Python 3.10 and 3.13.
 
+## Iteration 2 scope - image and small-PDF review
+
+- [x] Add memory-only PNG/JPEG/WebP normalization and local vision review contract.
+- [x] Add PDF text-layer extraction, deterministic rule masking, and page rendering.
+- [x] Flag PDF metadata presence and embedded-file/form/metadata-stream risks without exposing values.
+- [x] Add authenticated `POST /v1/scan-file` and local file picker UI.
+- [x] Enforce 6 MB, 5-page, 20-megapixel, encryption, and fail-closed limits.
+- [x] Add a synthetic target-Mac image/PDF vision smoke script.
+- [ ] Run Gemma 4 E2B vision smoke on the target 8 GB Mac and record aggregate timing/labels.
+- [ ] Benchmark synthetic multilingual/rotated/handwritten/metadata/form samples.
+- [ ] Isolate PDF parsing/rendering in a resource-limited subprocess before public/untrusted use.
+- [ ] Design and independently verify secure image/PDF redaction before enabling file export.
+
 ### 2026-10-24 — Scaffold author — Initial implementation
 - Goal: runnable rules-only CLI and optional local model fallback with validation contracts.
 - Files: see `IMPLEMENTATION.md` architecture table.
@@ -67,3 +80,19 @@
 - Next owner/action: run the documented command on the 8 GB Mac with Gemma 4 E2B Q4 loaded through LM Studio.
 
 - 2026-10-24T16:16:30+00:00 | Validation agent | PASS | files=27/27, tests=31; live local model and external integrations unverified.
+
+- 2026-10-24T16:22:21+00:00 | Validation agent | PASS | files=27/27, tests=31; live local model and external integrations unverified.
+
+### 2026-10-24 IST — Orchestrator / upload review — Iteration 2 first slice
+- Goal: locally review images and small PDFs using deterministic parsing plus Gemma vision semantics.
+- Files changed: `privacygate/uploads.py`, vision adapter in `privacygate/model.py`, `/v1/scan-file`, local UI upload controls, `ITERATION_2.md`, tests and smoke tooling.
+- Logic: normalize supported images in memory; cap bytes/pixels/pages; extract and mask PDF text; flag selected metadata and embedded structures without values; render every PDF page; accept only strict entity classes and optional normalized regions from local Gemma; block on unavailable/invalid vision; never export a redacted file.
+- Test commands + aggregate results: full suite passed 46 tests; validator passed 31/31 required files before final validator wording update.
+- Model/hardware verification (yes/no): no; live Gemma 4 image input remains unverified on the target Mac.
+- Evidence: synthetic images/PDFs, blank/text-layer PDFs, metadata-value withholding, embedded attachment warning, encryption/page/size rejection, bridge authentication/origin tests, and malformed-region rejection.
+- Residual risks / unsolved: in-process parser resource risk, vision false negatives/hallucinations, hidden PDF content, multilingual/handwriting quality, secure object-level redaction, and live 8 GB Mac performance.
+- Next owner/action: run `python scripts/smoke_local_uploads.py` with Gemma 4 E2B loaded, then record only labels/timing and build the bounded synthetic benchmark.
+
+- 2026-10-24T16:34:12+00:00 | Validation agent | PASS | files=31/31, tests=46; live local model and external integrations unverified.
+
+- 2026-10-24T16:34:27+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.

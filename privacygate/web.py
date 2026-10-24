@@ -5,6 +5,8 @@ The server deliberately has no forwarding endpoint and keeps request logging off
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 from pathlib import Path
@@ -18,8 +20,10 @@ from urllib.parse import urlparse
 from .model import GemmaLocalClient
 from .pipeline import review_text
 from .readiness import probe_local_gemma
+from .uploads import UploadReviewError, review_upload
 
 MAX_REQUEST_BYTES = 100_000
+MAX_UPLOAD_REQUEST_BYTES = 9_000_000
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 UI_ROOT = Path(__file__).with_name("ui")
@@ -80,7 +84,7 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         return secrets.compare_digest(supplied, expected)
 
     def do_OPTIONS(self) -> None:
-        if self.path != "/v1/scan" or not (origin := self._allowed_origin()):
+        if urlparse(self.path).path not in {"/v1/scan", "/v1/scan-file"} or not (origin := self._allowed_origin()):
             self._json(HTTPStatus.FORBIDDEN, {"error": "Origin not allowed"})
             return
         self.send_response(HTTPStatus.NO_CONTENT)
@@ -111,7 +115,8 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.OK, body, content_type)
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/v1/scan":
+        path = urlparse(self.path).path
+        if path not in {"/v1/scan", "/v1/scan-file"}:
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
         origin = self._allowed_origin()
@@ -128,25 +133,38 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if length <= 0 or length > MAX_REQUEST_BYTES:
+        request_limit = MAX_UPLOAD_REQUEST_BYTES if path == "/v1/scan-file" else MAX_REQUEST_BYTES
+        if length <= 0 or length > request_limit:
             self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Invalid request size"}, cors_origin=origin)
             return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError
-            text = payload.get("text")
-            mode = payload.get("mode", "on-uncertain")
-            if not isinstance(text, str) or not isinstance(mode, str):
-                raise ValueError
             if not self.server.scan_slots.acquire(blocking=False):
                 self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": "Scanner busy"}, cors_origin=origin)
                 return
             try:
-                result = review_text(text, mode=mode, model=self.server.model)
+                if path == "/v1/scan":
+                    text = payload.get("text")
+                    mode = payload.get("mode", "on-uncertain")
+                    if not isinstance(text, str) or not isinstance(mode, str):
+                        raise ValueError
+                    result = review_text(text, mode=mode, model=self.server.model)
+                else:
+                    encoded = payload.get("data_base64")
+                    media_type = payload.get("media_type")
+                    vision_mode = payload.get("vision_mode", "always")
+                    if not isinstance(encoded, str) or not isinstance(media_type, str) or not isinstance(vision_mode, str):
+                        raise ValueError
+                    try:
+                        upload = base64.b64decode(encoded, validate=True)
+                    except (binascii.Error, ValueError):
+                        raise ValueError from None
+                    result = review_upload(upload, media_type, vision_mode=vision_mode, model=self.server.model)
             finally:
                 self.server.scan_slots.release()
-        except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, UploadReviewError):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "Invalid scan request"}, cors_origin=origin)
             return
         self._json(HTTPStatus.OK, result.to_dict(), cors_origin=origin)
@@ -186,7 +204,8 @@ def main() -> int:
         probe = GemmaLocalClient(endpoint, args.model, timeout_seconds=5)
         readiness = probe_local_gemma(probe)
         print(f"Gemma fallback preflight: {'READY' if readiness.ready else 'NOT READY'} — {readiness.message}")
-        model = GemmaLocalClient(endpoint, args.model)
+        if readiness.ready:
+            model = GemmaLocalClient(endpoint, readiness.selected_model)
     server = create_server(port=args.port, token=token,
                            extension_origin=args.extension_origin, model=model)
     print(f"PrivacyGate UI: {server.local_origin}")

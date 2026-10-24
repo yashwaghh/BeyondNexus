@@ -10,6 +10,7 @@ class MockGemma(GemmaLocalClient):
 
     def _request(self, method, path, payload=None):
         self.called = True
+        self.last_payload = payload
         return {'choices': [{'message': {'content': self.content}}]}
 
 
@@ -34,6 +35,19 @@ class ModelTests(unittest.TestCase):
     def test_no_entities_is_valid(self):
         m = MockGemma('{"entities":[]}')
         self.assertEqual(m.detect('No PII here.'), [])
+
+    def test_vision_finding_accepts_normalized_region_without_raw_value(self):
+        m = MockGemma('{"entities":[{"entity_type":"PERSON","box_2d":[10,20,300,400]}]}')
+        rows = m.detect_image(b'png-bytes', 'image/png')
+        self.assertEqual(rows[0].entity, 'PERSON')
+        self.assertEqual(rows[0].region, (10, 20, 300, 400))
+        self.assertIn('data:image/png;base64,', str(m.last_payload))
+        self.assertNotIn('Aarav', str(rows))
+
+    def test_vision_invalid_region_fails_closed(self):
+        m = MockGemma('{"entities":[{"entity_type":"PERSON","box_2d":[500,20,10,400]}]}')
+        with self.assertRaises(LocalModelError):
+            m.detect_image(b'png-bytes', 'image/png')
 
 
 if __name__ == '__main__':

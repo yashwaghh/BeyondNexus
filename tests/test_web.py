@@ -1,10 +1,13 @@
 import json
+import base64
+import io
 import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, ProxyHandler
 
 from privacygate.web import create_server
+from PIL import Image
 
 
 class WebBridgeTests(unittest.TestCase):
@@ -40,6 +43,20 @@ class WebBridgeTests(unittest.TestCase):
         with self.opener.open(request, timeout=3) as response:
             return response.status, json.load(response), response.headers
 
+    def request_file(self, payload, *, token=TOKEN, origin=None):
+        request = Request(
+            self.origin + "/v1/scan-file",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+                "Origin": origin or self.origin,
+            },
+            method="POST",
+        )
+        with self.opener.open(request, timeout=3) as response:
+            return response.status, json.load(response)
+
     def test_rules_only_scan_masks_without_echoing_metadata(self):
         status, body, _ = self.request({"text": "Email demo@example.org", "mode": "off"})
         self.assertEqual(status, 200)
@@ -71,6 +88,8 @@ class WebBridgeTests(unittest.TestCase):
         with self.opener.open(self.origin + "/", timeout=3) as response:
             html = response.read().decode("utf-8")
             self.assertIn("PrivacyGate Local Review", html)
+            self.assertIn('id="upload"', html)
+            self.assertIn('id="scan-file"', html)
             self.assertNotIn("__PRIVACYGATE_TOKEN__", html)
             self.assertEqual(response.headers["Cache-Control"], "no-store")
 
@@ -82,6 +101,18 @@ class WebBridgeTests(unittest.TestCase):
         for origin in ["https://example.com", "chrome-extension://short", self.EXTENSION_ORIGIN + "?bad=1"]:
             with self.assertRaises(ValueError):
                 create_server(port=0, token=self.TOKEN, extension_origin=origin)
+
+    def test_file_scan_endpoint_is_fail_closed_without_vision_model(self):
+        image = io.BytesIO()
+        Image.new('RGB', (20, 20), 'white').save(image, format='PNG')
+        status, body = self.request_file({
+            "data_base64": base64.b64encode(image.getvalue()).decode('ascii'),
+            "media_type": "image/png",
+            "vision_mode": "always",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(body["status"], "BLOCKED_UNVERIFIED")
+        self.assertFalse(body["vision_succeeded"])
 
 
 if __name__ == "__main__":

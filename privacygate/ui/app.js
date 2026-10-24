@@ -1,11 +1,14 @@
 const source = document.querySelector('#source');
 const result = document.querySelector('#result');
 const scanButton = document.querySelector('#scan');
+const scanFileButton = document.querySelector('#scan-file');
+const upload = document.querySelector('#upload');
 const copyButton = document.querySelector('#copy');
 const reviewed = document.querySelector('#reviewed');
 const statusNode = document.querySelector('#status');
 const summary = document.querySelector('#summary');
 const warnings = document.querySelector('#warnings');
+const findingList = document.querySelector('#finding-list');
 const count = document.querySelector('#char-count');
 const token = document.querySelector('meta[name="privacygate-token"]').content;
 let latest = null;
@@ -18,8 +21,16 @@ source.addEventListener('input', () => {
   copyButton.disabled = true;
 });
 
+upload.addEventListener('change', () => {
+  latest = null;
+  reviewed.checked = false;
+  reviewed.disabled = true;
+  copyButton.disabled = true;
+});
+
 reviewed.addEventListener('change', () => {
-  copyButton.disabled = !reviewed.checked || !latest || latest.status === 'BLOCKED_UNVERIFIED';
+  copyButton.disabled = !reviewed.checked || !latest || !latest.sanitized_text
+    || latest.export_available === false || latest.status === 'BLOCKED_UNVERIFIED';
 });
 
 scanButton.addEventListener('click', async () => {
@@ -40,25 +51,39 @@ scanButton.addEventListener('click', async () => {
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || 'Local scan failed');
-    latest = body;
-    result.value = body.sanitized_text;
-    statusNode.textContent = body.status.replaceAll('_', ' ');
-    statusNode.className = `status ${body.status.toLowerCase()}`;
-    const counts = body.findings.reduce((map, finding) => {
-      map[finding.entity] = (map[finding.entity] || 0) + 1;
-      return map;
-    }, {});
-    const labels = Object.entries(counts).map(([key, value]) => `${value} ${key}`).join(' · ');
-    summary.textContent = labels || 'No known rule or model findings. Manual review is still required.';
-    warnings.replaceChildren(...body.warnings.map(message => {
-      const item = document.createElement('p'); item.textContent = message; return item;
-    }));
-    reviewed.disabled = body.status === 'BLOCKED_UNVERIFIED';
+    renderResult(body);
   } catch (error) {
     showError(error.message);
   } finally {
     scanButton.disabled = false;
     scanButton.textContent = 'Review locally';
+  }
+});
+
+scanFileButton.addEventListener('click', async () => {
+  const file = upload.files[0];
+  if (!file) return showError('Choose an image or PDF to review.');
+  if (file.size > 6 * 1024 * 1024) return showError('File exceeds the 6 MB local review limit.');
+  scanFileButton.disabled = true;
+  scanFileButton.textContent = 'Rendering & reviewing…';
+  reviewed.checked = false;
+  reviewed.disabled = true;
+  copyButton.disabled = true;
+  try {
+    const dataBase64 = await fileAsBase64(file);
+    const response = await fetch('/v1/scan-file', {
+      method: 'POST',
+      headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({data_base64: dataBase64, media_type: file.type, vision_mode: 'always'})
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || 'Local file review failed');
+    renderResult(body);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    scanFileButton.disabled = false;
+    scanFileButton.textContent = 'Review file with local Gemma vision';
   }
 });
 
@@ -74,4 +99,42 @@ function showError(message) {
   statusNode.className = 'status blocked_unverified';
   summary.textContent = message;
   warnings.replaceChildren();
+  findingList.replaceChildren();
+}
+
+function renderResult(body) {
+  latest = body;
+  result.value = body.sanitized_text || 'No sanitized file export is produced. Review the findings and original image/page locally.';
+  statusNode.textContent = body.status.replaceAll('_', ' ');
+  statusNode.className = `status ${body.status.toLowerCase()}`;
+  const counts = body.findings.reduce((map, finding) => {
+    map[finding.entity] = (map[finding.entity] || 0) + 1;
+    return map;
+  }, {});
+  const labels = Object.entries(counts).map(([key, value]) => `${value} ${key}`).join(' · ');
+  const pages = body.page_count ? `${body.page_count} page${body.page_count === 1 ? '' : 's'} · ` : '';
+  summary.textContent = pages + (labels || 'No known findings. Manual review is still required.');
+  findingList.replaceChildren(...body.findings.map(finding => {
+    const item = document.createElement('p');
+    const location = finding.page
+      ? `Page ${finding.page}${finding.region_0_1000 ? ` · region ${finding.region_0_1000.join(', ')}` : ''}`
+      : (Number.isInteger(finding.start) ? `Characters ${finding.start}-${finding.end}` : 'Document metadata');
+    item.textContent = `${location} · ${finding.entity} · ${finding.source}`;
+    return item;
+  }));
+  warnings.replaceChildren(...body.warnings.map(message => {
+    const item = document.createElement('p'); item.textContent = message; return item;
+  }));
+  reviewed.checked = false;
+  reviewed.disabled = body.status === 'BLOCKED_UNVERIFIED' || !body.sanitized_text || body.export_available === false;
+  copyButton.disabled = true;
+}
+
+function fileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('The selected file could not be read locally.'));
+    reader.onload = () => resolve(String(reader.result).split(',', 2)[1]);
+    reader.readAsDataURL(file);
+  });
 }

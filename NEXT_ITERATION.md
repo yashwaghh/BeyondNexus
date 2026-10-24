@@ -2,6 +2,9 @@
 
 **Status:** PROTOTYPE IMPLEMENTED, HARDENING INCOMPLETE. A scan-only bridge, local UI, and unpacked user-invoked Chrome MV3 prototype now exist. Do not claim supported-site or distribution readiness until the remaining acceptance tests pass.
 
+Image and small-PDF work has moved into the active iteration-two contract in
+`ITERATION_2.md`; this document remains the browser-integration roadmap.
+
 ## Goal
 
 Provide a user-initiated, open-source privacy review **before** text is placed into a web chatbot such as ChatGPT. The browser extension should communicate with a **local-only** PrivacyGate process, display sanitized candidates and policy warnings, and let the user approve a copy/insert action.

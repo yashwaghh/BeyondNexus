@@ -13,7 +13,7 @@
       <div>
         <p class="eyebrow">LOCAL REVIEW WORKBENCH</p>
         <h1>PrivacyGate</h1>
-        <p class="lede">Inspect and mask sensitive text before you decide what to share.</p>
+        <p class="lede">Inspect text, images, and small PDFs before you decide what to share.</p>
       </div>
       <span class="local-badge">● Loopback only</span>
     </header>
@@ -34,14 +34,20 @@
           </label>
           <button id="scan" class="primary">Review locally</button>
         </div>
+        <div class="upload-panel">
+          <div><strong>Or review a file</strong><p>PNG, JPEG, WebP, or PDF · 6 MB maximum · PDFs up to 5 pages</p></div>
+          <input id="upload" type="file" accept="image/png,image/jpeg,image/webp,application/pdf">
+          <button id="scan-file">Review file with local Gemma vision</button>
+        </div>
       </article>
 
       <article class="card result-card">
         <div class="card-head"><h2>2. Sanitized draft</h2><span id="status" class="status idle">Not scanned</span></div>
         <textarea id="result" readonly placeholder="Your locally sanitized draft will appear here."></textarea>
         <div id="summary" class="summary">No scan results yet.</div>
+        <div id="finding-list" class="finding-list"></div>
         <div id="warnings" class="warnings"></div>
-        <label class="approval"><input id="reviewed" type="checkbox" disabled> I reviewed the entire sanitized draft and understand that PII may remain.</label>
+        <label class="approval"><input id="reviewed" type="checkbox" disabled> I reviewed the entire result and understand that personal information may remain.</label>
         <button id="copy" disabled>Approve &amp; copy sanitized draft</button>
       </article>
     </section>

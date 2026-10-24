@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "privacygate-hackday"
-version = "0.1.0"
-description = "Local-first regex + optional Gemma PII pre-sharing guardrail"
+version = "0.2.0"
+description = "Local-first text, image, and small-PDF PII pre-sharing guardrail"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Hackathon team"}]
-dependencies = []
+dependencies = [
+  "Pillow>=10,<13",
+  "pypdf>=5,<7",
+  "pypdfium2>=4.30,<6",
+]
 
 [project.scripts]
 privacygate = "privacygate.__main__:main"

@@ -1,10 +1,10 @@
-# PrivacyGate — Iteration 1
+# PrivacyGate — Local Review Prototype
 
 [![macOS compatibility](https://github.com/yashwaghh/BeyondNexus/actions/workflows/macos.yml/badge.svg)](https://github.com/yashwaghh/BeyondNexus/actions/workflows/macos.yml)
 
 Local-first PII pre-sharing pipeline: **regex + validators → optional Gemma 4 via LM Studio → exact-span masking → human approval gate**.
 
-> **Status:** Prototype, not a guarantee of anonymity or compliance. Includes a localhost test UI and an unpacked, user-invoked Chrome prototype; neither automatically sends chat messages. Never use real identities to demo or debug.
+> **Status:** Iteration-two prototype, not a guarantee of anonymity or compliance. Includes text, image, and small-PDF local review plus an unpacked, user-invoked Chrome prototype; none automatically sends chat messages. Never use real identities to demo or debug.
 
 ## Quick start (macOS / Linux)
 
@@ -77,6 +77,18 @@ When Gemma mode is enabled, server startup performs a short readiness probe and
 prints `READY` or `NOT READY`. A failed probe does not silently downgrade a
 required contextual scan: that scan returns `BLOCKED_UNVERIFIED`.
 
+### Image and small-PDF review (iteration two)
+
+The same local UI accepts PNG, JPEG, WebP, and PDFs up to 6 MB; PDFs are limited
+to 5 pages. It extracts and masks PDF text, flags metadata/attachment risks,
+renders every page locally, and asks the loaded Gemma 4 model for semantic
+vision findings and optional normalized regions.
+
+This produces review guidance only. It does **not** create a redacted image or
+PDF, and a sanitized text extraction is not a sanitized document. See
+[`ITERATION_2.md`](ITERATION_2.md) for the contract, threat limits, and target-Mac
+benchmark plan.
+
 The server binds only to `127.0.0.1`, creates a fresh bearer token, disables
 request logs, limits request size/concurrency, and exposes no forwarding API.
 The UI keeps copy disabled until the user reviews the draft; blocked/unverified
@@ -101,10 +113,11 @@ With `--mode off`, regex is tested without Gemma; `--mode on-uncertain` calls on
 - [`PROGRESS.md`](PROGRESS.md): append-only work log, next tasks, tests and handoff.
 - [`THREAT_MODEL.md`](THREAT_MODEL.md): risk boundaries and minimum controls.
 - [`NEXT_ITERATION.md`](NEXT_ITERATION.md): planned local bridge + browser extension integration, explicitly out of scope now.
+- [`ITERATION_2.md`](ITERATION_2.md): bounded image/PDF parsing and local Gemma vision-review contract.
 
 ## Limitations
 
-English-centric heuristics; text only; no PDF/DOCX/OCR yet; no indirect identity guarantees; possible misses and false alarms; LLM classification is uncertain and must be reviewed. Browser capture is user-invoked and cannot cover uploads, native apps, every editor, or every send path. Rule heuristics are **not calibrated probabilities**. Bank-account numbers are not verified. PAN-shape is not proof of a real PAN. Aadhaar format/checksum is not identity verification. No cloud inference is allowed.
+English-centric deterministic heuristics; image/PDF vision is unbenchmarked; no DOCX or secure redacted-file export yet; no indirect identity guarantees; possible misses and false alarms. Browser capture is user-invoked and cannot cover native apps or every send path. Rule/model scores are **not calibrated probabilities**. Bank-account numbers are not verified. PAN-shape is not proof of a real PAN. Aadhaar format/checksum is not identity verification. No cloud inference is allowed.
 
 ## Licensing
 

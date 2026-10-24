@@ -23,6 +23,9 @@ Protect users **before** they share text/documents with cloud AI tools. Optimize
 | ADR-006 | Python standard library for initial runtime | Minimal setup for hackathon | After first working demo |
 | ADR-007 | Extension integration later | Browser/client internals are brittle, security-sensitive | V1 acceptance complete |
 | ADR-008 | Implement a user-invoked MV3 prototype before a ChatGPT plugin | Pre-sharing review must happen before cloud chat context; `activeTab` limits access | After dummy-page and supported-site security tests |
+| ADR-009 | Small uploads use deterministic PDF/text parsing plus rendered-page Gemma vision | Text extraction alone misses scanned/visual content; vision alone is untrusted | After target-Mac quality benchmark |
+| ADR-010 | Iteration-two upload review produces no redacted file | Model regions and PDF overlays are not secure deletion | After verified object-level redaction design |
+| ADR-011 | Use Pillow, pypdf and pypdfium2 for bounded local parsing/rendering | Cross-platform wheels and permissive PDFium bindings; avoids hosted conversion | Revisit after parser isolation/security audit |
 
 ## Current implementation
 
@@ -32,6 +35,9 @@ Protect users **before** they share text/documents with cloud AI tools. Optimize
 - `privacygate/__main__.py`: CLI; no forwarding capability.
 - `privacygate/web.py` + `privacygate/ui/`: authenticated loopback-only test UI; no forwarding capability.
 - `extension/`: unpacked MV3 manual capture/review/copy/replace prototype; never submits.
+- `privacygate/uploads.py`: memory-only image normalization and small-PDF text/metadata/render review.
+- `privacygate/model.py`: strict local Gemma text and image finding adapters.
+- `privacygate/web.py`: authenticated `/v1/scan-file` endpoint used by the local UI.
 - `tests/`: synthetic data and fail-closed cases.
 - `scripts/validate_iteration.py`: independent basic validation agent.
 
@@ -51,7 +57,8 @@ V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED
 
 - V2 task-aware selective minimization: `task_goal`, retain/drop recommendations and user review.
 - V2 hardening of the implemented local bridge and Chrome MV3 prototype: token expiry, dummy-page/site matrix, offline network proof and security review. No guaranteed interception of every ChatGPT/Gemini/Claude request.
-- V3 document extraction, OCR, secure PDF redaction, additional languages and person/address NER benchmarks.
+- Iteration 2 live Gemma vision benchmark on synthetic images/small PDFs, then parser isolation and secure export design.
+- V3 larger documents, OCR benchmarks, secure PDF redaction, additional languages and person/address NER benchmarks.
 - V3 existing baseline comparisons with Presidio, more robust evaluation, enterprise integration.
 
 ## Agent persistence protocol
@@ -68,3 +75,4 @@ V1 statuses: `READY_FOR_MANUAL_APPROVAL`, `REVIEW_REQUIRED`, `BLOCKED_UNVERIFIED
 - Is a regex-only policy acceptable for certain identifiers? Needs test set.
 - Chrome MV3 is the selected first target; supported-site evidence and store/distribution approach remain open.
 - What Hindi/Marathi detection accuracy can we demonstrate? Not established.
+- What Gemma 4 E2B vision accuracy/latency can the 8 GB Mac sustain across 1-5 rendered pages? Unverified.
