@@ -65,6 +65,7 @@ $('#target').addEventListener('click', async () => {
     target.text = result.text;
     $('#target-label').textContent = 'ChatGPT connected. Insertion replaces its captured draft.';
     setMessage('Write privately here, or capture the existing ChatGPT draft.');
+    $('#target-label')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   } catch (error) { target = null; setMessage(error.message, true); }
 });
 $('#capture').addEventListener('click', async () => {
@@ -73,6 +74,7 @@ $('#capture').addEventListener('click', async () => {
     target.text = result.text;
     $('#source').value = result.text; resetApproval();
     setMessage('Draft captured. Content already typed on ChatGPT may already be accessible to that website.');
+    $('#source')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   } catch (error) { setMessage(error.message, true); }
 });
 $('#scan').addEventListener('click', async () => {
@@ -108,6 +110,7 @@ $('#scan').addEventListener('click', async () => {
     $('#reviewed').disabled = body.status === 'BLOCKED_UNVERIFIED';
     updateActions();
     setMessage(body.status === 'BLOCKED_UNVERIFIED' ? 'Verification incomplete. Copy and insertion blocked.' : 'Review the entire proposed draft before approving.');
+    $('#output')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   } catch (error) {
     if (revision === version) setMessage(error.name === 'AbortError'
       ? 'Local scan timed out. Nothing was inserted.' : (error.message || 'Local connection failed. Check Settings.'), true);
@@ -136,6 +139,7 @@ $('#scan-file').addEventListener('click', async () => {
     });
     if (version !== revision) return;
     setMessage('Rendering and inspecting locally. Multi-page PDFs may take several minutes.');
+    $('#message')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
     const response = await fetch(`${BRIDGE}/v1/scan-file`, {
       method: 'POST', signal: request.signal,
       headers: {Authorization: `Bearer ${config.bridgeToken}`, 'Content-Type': 'application/json'},
@@ -159,6 +163,7 @@ $('#scan-file').addEventListener('click', async () => {
       if (!response.ok) throw new Error('Export failed. Rescan if the 15-minute authorization expired.');
       return response.blob();
     }});
+    $('#document-preview')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     if (version === revision) setMessage(body.status === 'BLOCKED_UNVERIFIED'
       ? 'Visual verification incomplete. Inspect the original; previews are not redaction.'
       : 'Suspected information is highlighted. Labels and locations may be wrong; inspect every page.');
@@ -190,6 +195,7 @@ $('#insert').addEventListener('click', async () => {
     resetApproval(); target = null;
     $('#target-label').textContent = 'Insertion complete. Reconnect before another insertion.';
     setMessage('Inserted into ChatGPT. Inspect the composer; click Send yourself when ready.');
+    $('#target-label')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   } catch (error) { disconnect(); setMessage(error.message, true); }
 });
 $('#clear').addEventListener('click', () => {
@@ -209,26 +215,29 @@ function setMessage(text, error = false) { $('#message').textContent = text; $('
 resetApproval();
 
 async function attachRedacted(blob, format, signal, intended) {
-  if (!intended) throw new Error('Start file review while the intended ChatGPT conversation is active, then prepare the export again.');
+  const [active] = await chrome.tabs.query({active:true,currentWindow:true});
+  const target = (active?.url && new URL(active.url).origin === 'https://chatgpt.com') ? active : intended;
+  if (!target?.url || new URL(target.url).origin !== 'https://chatgpt.com')
+    throw new Error('Open your intended ChatGPT conversation and keep it active, then click Attach.');
   if (!blob.size || blob.size > 10*1024*1024 || blob.type !== (format === 'png' ? 'image/png' : 'application/pdf'))
     throw new Error('Attachment exceeds the local 10 MB limit or has an invalid type. Download and attach manually.');
   async function verifyTarget() {
     if (signal.aborted) throw new Error('Attachment cancelled.');
-    const [active] = await chrome.tabs.query({active:true,currentWindow:true});
-    const tab = await chrome.tabs.get(intended.id);
-    if (active?.id !== intended.id || tab.url !== intended.url) throw new Error('ChatGPT tab or conversation changed. Review the file again in the intended tab.');
+    const [current] = await chrome.tabs.query({active:true,currentWindow:true});
+    if (!current?.url || new URL(current.url).origin !== 'https://chatgpt.com')
+      throw new Error('ChatGPT tab changed. Keep the ChatGPT tab active while attaching.');
     if (signal.aborted) throw new Error('Attachment cancelled.');
   }
   await verifyTarget();
-  const [{result: picker}] = await chrome.scripting.executeScript({target:{tabId:intended.id},func:chatgptAttachment,
-    args:['inspect',intended.url,{type:blob.type}]});
+  const [{result: picker}] = await chrome.scripting.executeScript({target:{tabId:target.id},func:chatgptAttachment,
+    args:['inspect',target.url,{type:blob.type}]});
   if (!picker?.ready) throw new Error(picker?.error || 'Attachment picker unavailable. Download and attach manually.');
   const data = await new Promise((resolve,reject) => {
     const reader = new FileReader(); reader.onerror=() => reject(new Error('Cannot read generated export.'));
     reader.onload=() => resolve(String(reader.result).split(',',2)[1]); reader.readAsDataURL(blob);
   });
   await verifyTarget();
-  const [{result}] = await chrome.scripting.executeScript({target:{tabId:intended.id},func:chatgptAttachment,
-    args:['attach',intended.url,{type:blob.type,base64:data,fingerprint:picker.fingerprint}]});
+  const [{result}] = await chrome.scripting.executeScript({target:{tabId:target.id},func:chatgptAttachment,
+    args:['attach',target.url,{type:blob.type,base64:data,fingerprint:picker.fingerprint}]});
   if (!result?.assigned) throw new Error(result?.error || 'Attachment could not be assigned. Download and attach manually.');
 }

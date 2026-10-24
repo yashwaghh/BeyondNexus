@@ -18,6 +18,11 @@ def _line(ok: bool, label: str, detail: str) -> None:
 
 
 def main() -> int:
+    try:
+        from .web import _load_env_file
+        _load_env_file()
+    except Exception:
+        pass
     parser = argparse.ArgumentParser(description="Check macOS and local Gemma fallback readiness")
     parser.add_argument("--uploads", action="store_true", help="Also require local OCR engine and configured languages")
     parser.add_argument("--smoke", action="store_true",

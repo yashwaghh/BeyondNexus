@@ -131,8 +131,11 @@ globalThis.PrivacyGatePreview = (() => {
     cleanups.set(root, revoke);
     function update() {
       undo.disabled = !history.length;
-      attach.disabled = !prepared || attached || !enabled || !approval.checked || !toggle.checked || Boolean(request);
+      attach.disabled = attached || !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
       if (regions.length > 500) message.textContent = 'Too many masks (maximum 500). Use Mask whole page to replace that page\'s masks, or remove excess masks.';
+      else if (!toggle.checked) message.textContent = 'Enable "Show masked preview" to review and export.';
+      else if (!approval.checked) message.textContent = 'Tick "I inspected every masked page..." above to enable export.';
+      else if (!prepared && !request) message.textContent = 'Click "Prepare redacted PNG/PDF" to download, or click "Attach" to upload to ChatGPT.';
       for (const button of buttons) button.disabled = !enabled || !approval.checked || !toggle.checked || regions.length > 500 || Boolean(request);
     }
     function draw() {
@@ -203,8 +206,14 @@ globalThis.PrivacyGatePreview = (() => {
       });
       canvas.addEventListener('pointercancel', () => { start = null; pointerId = null; revoke(); draw(); });
     }
-    toggle.addEventListener('change', () => { revoke(); draw(); });
-    approval.addEventListener('change', () => { if (!approval.checked) revoke(); update(); });
+    toggle.addEventListener('change', () => {
+      revoke(); draw();
+      if (toggle.checked) approvalLabel?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    });
+    approval.addEventListener('change', () => {
+      if (!approval.checked) revoke(); update();
+      if (approval.checked) (buttons[0] || attach)?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    });
     panel.append(heading, help, toggleLabel, approvalLabel, undo, list);
     for (const format of pages.length === 1 ? ['png','pdf'] : ['pdf']) {
       const button = document.createElement('button'); button.type = 'button'; button.className = `export-${format}`;
@@ -223,6 +232,7 @@ globalThis.PrivacyGatePreview = (() => {
           const link = document.createElement('a'); link.href = url; link.className = 'redacted-download';
           link.download = `privacygate-redacted.${format}`; link.textContent = `Download redacted ${format.toUpperCase()}`;
           downloads.replaceChildren(link); message.textContent = 'File ready. Inspect the downloaded copy before sharing; detection can miss information.';
+          downloads?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
         } catch (error) {
           if (versions.get(root) === version && editVersion === edit) message.textContent = error.name === 'AbortError' ? 'Export cancelled or timed out.' : error.message;
         } finally { clearTimeout(timer); if (request === current) { request = null; update(); } }
@@ -233,16 +243,33 @@ globalThis.PrivacyGatePreview = (() => {
       const sharing = document.createElement('p');
       sharing.textContent = 'Attach uploads the generated redacted copy to the connected ChatGPT conversation. It never clicks Send. Check the website for upload completion before sending.';
       attach.addEventListener('click', async () => {
-        if (attach.disabled || !prepared || request) return;
-        const file = prepared, edit = editVersion;
+        if (attach.disabled || attached || request) return;
+        const defaultFormat = pages.length === 1 ? 'png' : 'pdf';
+        const edit = editVersion;
         request = new AbortController(); const current = request;
-        const timer = setTimeout(() => current.abort(),15000); update();
-        message.textContent = 'Handing the reviewed redacted copy to ChatGPT...';
+        const timer = setTimeout(() => current.abort(), 60000); update();
         try {
+          let file = prepared;
+          if (!file) {
+            message.textContent = `Building redacted ${defaultFormat.toUpperCase()} and preparing attachment...`;
+            const blob = await exportFile({regions, output_format: defaultFormat, reviewed: true}, current.signal);
+            if (versions.get(root) !== version || editVersion !== edit) return;
+            if (!blob.size || blob.type !== (defaultFormat === 'png' ? 'image/png' : 'application/pdf'))
+              throw new Error('Invalid export response; no file created.');
+            prepared = {blob, format: defaultFormat};
+            if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
+            const link = document.createElement('a'); link.href = url; link.className = 'redacted-download';
+            link.download = `privacygate-redacted.${defaultFormat}`; link.textContent = `Download redacted ${defaultFormat.toUpperCase()}`;
+            downloads.replaceChildren(link);
+            downloads?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+            file = prepared;
+          }
+          message.textContent = 'Handing the reviewed redacted copy to ChatGPT...';
           await attachFile(file.blob, file.format, current.signal);
           if (versions.get(root) !== version || editVersion !== edit) return;
           attached = true;
           message.textContent = 'Redacted file handed to the ChatGPT picker. Verify the attachment and upload completion there. Send was not clicked.';
+          message?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
         } catch (error) {
           if (versions.get(root) === version && editVersion === edit) message.textContent = error.message || 'Attachment failed. Download and attach manually.';
         } finally { clearTimeout(timer); if (request === current) { request = null; update(); } }
@@ -251,6 +278,7 @@ globalThis.PrivacyGatePreview = (() => {
     }
     if (!enabled) message.textContent = 'Export blocked: complete OCR and vision review first, then rescan. Export authorization expires after 15 minutes.';
     panel.append(message,downloads); root.append(panel); listMasks(); update();
+    setTimeout(() => panel?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 30);
   }
   return {render, clear, validBox, label};
 })();

@@ -2,7 +2,31 @@
 function chatgptAttachment(action, expectedUrl, payload) {
   if (location.origin !== 'https://chatgpt.com' || location.href !== expectedUrl)
     return {error: 'The ChatGPT conversation changed. Review again before attaching.'};
-  const editors = [...document.querySelectorAll('#prompt-textarea')].filter(node => node.getClientRects().length);
+  let editors = [...document.querySelectorAll('#prompt-textarea')].filter(node => node.getClientRects().length);
+  if (editors.length > 1) {
+    const visible = editors.filter(node => {
+      const rect = typeof node.getBoundingClientRect === 'function' ? node.getBoundingClientRect() : null;
+      return (!rect || (rect.width > 0 && rect.height > 0)) && (node.offsetParent !== null || !('offsetParent' in node));
+    });
+    if (visible.length === 1) editors = visible;
+    else {
+      const inForm = (visible.length ? visible : editors).filter(node => typeof node.closest === 'function' && node.closest('form'));
+      if (inForm.length === 1) editors = inForm;
+    }
+  }
+  if (!editors.length) {
+    const wrapper = document.querySelector('#prompt-textarea');
+    if (wrapper) {
+      const inner = wrapper.querySelector('textarea, [contenteditable="true"]');
+      if (inner && inner.getClientRects().length) editors = [inner];
+    }
+  }
+  if (!editors.length) {
+    const fallback = [...document.querySelectorAll('form [contenteditable="true"], main [contenteditable="true"], form textarea')].filter(node =>
+      node.getClientRects().length && (node.offsetParent !== null || !('offsetParent' in node))
+    );
+    if (fallback.length === 1) editors = fallback;
+  }
   if (editors.length !== 1) return {error: 'A unique ChatGPT composer was not found. Download and attach manually.'};
   const type = payload?.type;
   if (!['image/png', 'application/pdf'].includes(type)) return {error: 'Unsupported redacted file type.'};
@@ -21,7 +45,15 @@ function chatgptAttachment(action, expectedUrl, payload) {
     return choices.includes(type) || choices.includes(suffix) ? 2 : choices.includes('image/*') && type === 'image/png' ? 1 : 0;
   };
   const best = Math.max(-1,...compatible.map(specificity));
-  const candidates = compatible.filter(node => specificity(node) === best);
+  let candidates = compatible.filter(node => specificity(node) === best);
+  if (candidates.length > 1 && editors[0]) {
+    let parent = editors[0].parentElement;
+    while (parent && parent !== document.body) {
+      const match = candidates.find(node => typeof parent.contains === 'function' && parent.contains(node));
+      if (match) { candidates = [match]; break; }
+      parent = parent.parentElement;
+    }
+  }
   if (candidates.length !== 1)
     return {error: 'A unique compatible file picker was not found. Download and attach manually.'};
   const input = candidates[0];

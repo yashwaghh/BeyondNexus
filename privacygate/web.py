@@ -248,7 +248,28 @@ def create_server(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, token: 
                              extension_origin=extension_origin, model=model, ocr=ocr)
 
 
+def _load_env_file() -> None:
+    for candidate in (
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parent.parent / ".env",
+        Path.cwd() / "BeyondNexus" / ".env",
+    ):
+        if candidate.is_file():
+            try:
+                for line in candidate.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+            except OSError:
+                pass
+            break
+
+
 def main() -> int:
+    _load_env_file()
     parser = argparse.ArgumentParser(description="Run the local-only PrivacyGate test interface")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--extension-origin", help="Exact unpacked extension origin, if extension access is needed")
