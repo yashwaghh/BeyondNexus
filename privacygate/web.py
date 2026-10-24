@@ -70,7 +70,10 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", cors_origin)
             self.send_header("Vary", "Origin")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _json(self, status: int, payload: dict, *, cors_origin: str | None = None) -> None:
         if status >= 400 and self.command == 'POST' and not getattr(self, '_body_consumed', False):
