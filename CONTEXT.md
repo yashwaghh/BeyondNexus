@@ -88,3 +88,6 @@ ADR-015: user authorized extension improvements, redaction and export. Use destr
 
 ## Explicit extension file integration (2026-10-25)
 ADR-016: user explicitly authorized an Attach button for reviewed redacted exports. Transfer only newly generated PNG/PDF bytes on an explicit click, bound to the active ChatGPT tab and exact review-time conversation URL. Never submit a message. Missing/ambiguous file pickers fail to manual download. This supersedes earlier no-attachment restrictions for this user-invoked action only. See extension/README.md v0.5.0.
+
+## Common document refinement (2026-10-25)
+User authorized expanding identification/redaction across common and standard documents. Added conservative English labelled-field recognition for uploads and PDF text layers, a 16-document synthetic matrix plus benign control, and required native OCR image/PDF benchmarking in macOS CI. This is not universal document support or an authenticity check. See DOCUMENT_COVERAGE.md for fields, evidence and limitations.

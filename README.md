@@ -137,3 +137,5 @@ The extension (v0.4.0) and local UI now let you draw/remove masks, inspect a bla
 
 ## Extension integration v0.5.0
 The side panel now checks its bridge connection and can explicitly attach a prepared reviewed redacted PNG/PDF to the exact ChatGPT conversation used for file review. Preparing an export never uploads it, and the extension never clicks Send. See [extension setup and attachment workflow](extension/README.md#explicit-reviewed-attachment-v050). Reload the extension and restart the bridge after pulling. Authenticated ChatGPT upload acceptance still needs a manual synthetic test.
+
+Common document coverage in v0.6.0: see [DOCUMENT_COVERAGE.md](DOCUMENT_COVERAGE.md) for the synthetic 16-document matrix, sensitive fields, native image/PDF benchmark and remaining limitations. Restart the bridge and reload the extension after updating.

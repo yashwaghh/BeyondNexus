@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 from .detectors import detect_rules, verhoeff_valid
+from .document_fields import detect_document_fields
 
 
 # Upload-only conservative candidates: checksum failure may be an OCR error.
@@ -42,7 +43,7 @@ class OCRPage:
     def findings(self, page: int) -> list[dict]:
         output = []
         candidates = []
-        for finding in detect_rules(self.text):
+        for finding in detect_rules(self.text) + detect_document_fields(self.text):
             words = [w for w in self.words if w['start'] < finding.end and w['end'] > finding.start]
             candidates.append((words, finding.entity, finding.confidence, finding.source, finding.rationale))
 
@@ -70,6 +71,9 @@ class OCRPage:
                 offset += len(value); previous = word
             views.append((''.join(fragments), mapped))
         for text, mapped in views:
+            for finding in detect_document_fields(text):
+                words = [w for w in mapped if w['start'] < finding.end and w['end'] > finding.start]
+                candidates.append((words, finding.entity, finding.confidence, finding.source, finding.rationale))
             for pattern in (_ID_SHAPE, _MASKED_ID):
                 for match in pattern.finditer(text):
                     value = match.group()

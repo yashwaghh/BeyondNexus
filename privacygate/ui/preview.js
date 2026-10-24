@@ -6,7 +6,9 @@ globalThis.PrivacyGatePreview = (() => {
     PERSON: 'Person / identifying photograph', ADDRESS: 'Postal address',
     PHONE: 'Possible phone number', EMAIL: 'Email address', PAN: 'PAN identifier',
     AADHAAR: 'Aadhaar identifier', BANK_ACCOUNT: 'Bank account', OTHER_PII: 'Other identifying information',
-    POSSIBLE_ID: 'Possible identity number'
+    POSSIBLE_ID: 'Possible identity number', DATE_OF_BIRTH: 'Date of birth',
+    FINANCIAL_ID: 'Financial identifier', HEALTH_INFO: 'Health information',
+    FINANCIAL_INFO: 'Personal financial information'
   };
   function label(finding) { return names[finding.entity] || 'Possible personal information'; }
   function validBox(box) {

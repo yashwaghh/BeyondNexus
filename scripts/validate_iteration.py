@@ -11,6 +11,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
+    'privacygate/document_fields.py', 'tests/test_document_fields.py',
+    'scripts/document_samples.py', 'scripts/benchmark_documents.py', 'DOCUMENT_COVERAGE.md',
     'README.md', 'IMPLEMENTATION.md', 'INTEGRATION_DECISION.md', 'ITERATION_2.md', 'CONTEXT.md', 'AGENTS.md',
     'PROGRESS.md', 'NEXT_ITERATION.md', 'THREAT_MODEL.md', '.env.example',
     '.gitignore', 'LICENSE', 'pyproject.toml',

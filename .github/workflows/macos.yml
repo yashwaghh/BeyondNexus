@@ -34,6 +34,8 @@ jobs:
         run: brew install tesseract
       - name: Benchmark synthetic OCR detection and localization
         run: python scripts/benchmark_uploads.py --require-perfect
+      - name: Benchmark common synthetic documents as images and PDFs
+        run: python scripts/benchmark_documents.py --require-perfect
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Run iteration validator

@@ -12,7 +12,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 import pypdfium2 as pdfium
 from pypdf import PdfReader
 
-from .detectors import detect_rules
+from .detectors import detect_rules, merge_nonoverlapping
+from .document_fields import detect_document_fields
 from .model import GemmaLocalClient, LocalModelError, VisionFinding
 from .pipeline import HIGH_THRESHOLD, sanitize
 from .ocr import TesseractOCR, OCRError
@@ -232,7 +233,7 @@ def review_upload(data: bytes, media_type: str, *, vision_mode: str = 'always',
             if not text:
                 sanitized_pages.append(f'--- Page {page_number}: no extractable text layer ---')
                 continue
-            rule_findings = detect_rules(text)
+            rule_findings = merge_nonoverlapping(detect_rules(text) + detect_document_fields(text))
             sanitized_pages.append(f'--- Page {page_number} ---\n{sanitize(text, rule_findings)}')
             findings.extend({
                 'page': page_number,

@@ -73,6 +73,28 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json(self, status: int, payload: dict, *, cors_origin: str | None = None) -> None:
+        if status >= 400 and self.command == 'POST' and not getattr(self, '_body_consumed', False):
+            # Closing with an unread POST body can reset the socket before Windows
+            # clients receive the rejection. Discard bounded bytes, never parse or
+            # scan them, and never wait indefinitely for an unauthenticated sender.
+            try:
+                remaining = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                remaining = 0
+            if 0 < remaining <= MAX_UPLOAD_REQUEST_BYTES:
+                previous_timeout = self.connection.gettimeout()
+                deadline = time.monotonic() + .25
+                try:
+                    while remaining and time.monotonic() < deadline:
+                        self.connection.settimeout(max(.001, deadline-time.monotonic()))
+                        chunk = self.rfile.read(min(65536, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                except OSError:
+                    pass
+                finally:
+                    self.connection.settimeout(previous_timeout)
         self._send(status, json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                    "application/json; charset=utf-8", cors_origin=cors_origin)
 
@@ -147,7 +169,9 @@ class PrivacyGateHandler(BaseHTTPRequestHandler):
         ticket = None
         export_result = None
         try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            raw = self.rfile.read(length)
+            self._body_consumed = True
+            payload = json.loads(raw.decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError
             if not self.server.scan_slots.acquire(blocking=False):

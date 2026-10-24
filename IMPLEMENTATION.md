@@ -259,3 +259,6 @@ REDACTION_EXPORT.md defines the implemented image/PDF export path and its accept
 
 ## Conservative upload identifiers
 Upload OCR applies additional identifier-shape rules independently of text-only checksum detection. Unlabelled, invalid-checksum or OCR-confused 12-digit candidates and masked identifiers' visible final digits receive POSSIBLE_ID review boxes and default export masks. Spatial row reconstruction supplements OCR reading order. This deliberately trades some false positives for better protection; it cannot detect pixels OCR never recognized. See PROGRESS.md v0.5.1.
+
+## Common document fields
+See DOCUMENT_COVERAGE.md. OCR reading order and spatial rows run labelled personal-field rules; PDF text layers run the same rules with overlap merging before masking. All located findings seed default masks. The 34-case native image/PDF benchmark is a separate macOS gate, distinct from injected OCR unit tests and live Gemma testing. No new runtime dependency or remote analysis.
