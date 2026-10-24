@@ -1,84 +1,122 @@
 const $ = selector => document.querySelector(selector);
-let latest = null;
-
+const BRIDGE = 'http://127.0.0.1:8765';
+let latest = null, target = null, revision = 0, controller = null;
+const allowed = () => Boolean(latest && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED');
 $('#settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('#source').addEventListener('input', resetApproval);
+$('#mode').addEventListener('change', resetApproval);
 $('#reviewed').addEventListener('change', updateActions);
+chrome.tabs.onActivated.addListener(() => disconnect());
+chrome.tabs.onUpdated.addListener((id, change) => {
+  if (target?.id === id && (change.url || change.status === 'loading')) disconnect();
+});
+chrome.storage.onChanged.addListener(() => resetApproval());
 
+function disconnect() {
+  target = null; resetApproval();
+  $('#target-label').textContent = 'Target disconnected. Reconnect the intended ChatGPT tab.';
+}
+async function composer(action, replacement, approvalRevision) {
+  if (!target) throw new Error('Connect the intended ChatGPT tab first.');
+  const [active] = await chrome.tabs.query({active: true, currentWindow: true});
+  if (active?.id !== target.id) throw new Error('The active tab changed. Reconnect ChatGPT.');
+  const tab = await chrome.tabs.get(target.id);
+  if (tab.url !== target.url) throw new Error('The conversation changed. Reconnect ChatGPT.');
+  if (action === 'insert' && (revision !== approvalRevision || !allowed()))
+    throw new Error('Approval changed. Review again before inserting.');
+  const [{result}] = await chrome.scripting.executeScript({
+    target: {tabId: target.id}, func: chatgptComposer,
+    args: [action, target.text, replacement ?? null]
+  });
+  if (!result || result.error) throw new Error(result?.error || 'Composer unavailable.');
+  return result;
+}
+$('#target').addEventListener('click', async () => {
+  disconnect();
+  try {
+    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    if (!tab?.url || new URL(tab.url).origin !== 'https://chatgpt.com')
+      throw new Error('Open ChatGPT and click the PrivacyGate toolbar icon to grant access.');
+    target = {id: tab.id, url: tab.url, text: ''};
+    const result = await composer('read');
+    target.text = result.text;
+    $('#target-label').textContent = 'ChatGPT connected. Insertion replaces its captured draft.';
+    setMessage('Write privately here, or capture the existing ChatGPT draft.');
+  } catch (error) { target = null; setMessage(error.message, true); }
+});
 $('#capture').addEventListener('click', async () => {
   try {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    const [{result}] = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: readFocusedField});
-    if (!result) throw new Error('Focus a text field or editable composer first.');
-    $('#source').value = result;
-    resetApproval();
-    setMessage('Captured locally. Nothing has been sent.');
+    const result = await composer('read');
+    target.text = result.text;
+    $('#source').value = result.text; resetApproval();
+    setMessage('Draft captured. Content already typed on ChatGPT may already be accessible to that website.');
   } catch (error) { setMessage(error.message, true); }
 });
-
 $('#scan').addEventListener('click', async () => {
-  if (!$('#source').value.trim()) return setMessage('Enter or capture text first.', true);
-  const config = await chrome.storage.local.get({bridgeUrl: 'http://127.0.0.1:8765', bridgeToken: ''});
-  if (!config.bridgeToken) return setMessage('Open settings and save the bridge token shown by the local server.', true);
+  resetApproval();
+  const text = $('#source').value, mode = $('#mode').value, version = revision;
+  if (!text.trim()) return setMessage('Enter text first.', true);
   $('#scan').disabled = true;
+  const request = new AbortController(); controller = request;
+  const timer = setTimeout(() => request.abort(), 180000);
   try {
-    const response = await fetch(`${config.bridgeUrl.replace(/\/$/, '')}/v1/scan`, {
-      method: 'POST', headers: {'Authorization': `Bearer ${config.bridgeToken}`, 'Content-Type': 'application/json'},
-      body: JSON.stringify({text: $('#source').value, mode: $('#mode').value})
+    const config = await chrome.storage.local.get({bridgeToken: ''});
+    if (!config.bridgeToken) throw new Error('Save the local bridge token in Settings first.');
+    if (revision !== version) return;
+    setMessage('Reviewing locally. Gemma may take a minute; keep this panel open.');
+    const response = await fetch(`${BRIDGE}/v1/scan`, {
+      method: 'POST', signal: request.signal,
+      headers: {Authorization: `Bearer ${config.bridgeToken}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify({text, mode})
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || 'Local bridge rejected the scan.');
+    if (!response.ok) throw new Error(body.error || 'Local scan rejected.');
+    if (revision !== version) return;
+    if (!['READY_FOR_MANUAL_APPROVAL', 'REVIEW_REQUIRED', 'BLOCKED_UNVERIFIED'].includes(body.status)
+        || typeof body.sanitized_text !== 'string' || !Array.isArray(body.findings)
+        || !Array.isArray(body.warnings)) throw new Error('Invalid bridge response.');
     latest = body;
-    $('#output').hidden = false;
-    $('#result').value = body.sanitized_text;
+    $('#output').hidden = false; $('#result').value = body.sanitized_text;
     $('#status').textContent = body.status.replaceAll('_', ' ');
-    const counts = body.findings.reduce((all, finding) => ({...all, [finding.entity]: (all[finding.entity] || 0) + 1}), {});
-    $('#summary').textContent = Object.entries(counts).map(([kind, amount]) => `${amount} ${kind}`).join(' · ') || 'No known findings; manual review is still required.';
+    $('#summary').textContent = body.findings.map(f => `${f.entity} (${f.source})`).join(' · ')
+      || 'No known findings; manual review is still required.';
     $('#warnings').textContent = body.warnings.join(' ');
-    $('#reviewed').checked = false;
     $('#reviewed').disabled = body.status === 'BLOCKED_UNVERIFIED';
     updateActions();
-    setMessage(body.status === 'BLOCKED_UNVERIFIED' ? 'Contextual verification is incomplete; copy and insert stay blocked.' : 'Review every character before approving.', body.status === 'BLOCKED_UNVERIFIED');
-  } catch (error) { setMessage(error.message, true); }
-  finally { $('#scan').disabled = false; }
+    setMessage(body.status === 'BLOCKED_UNVERIFIED' ? 'Verification incomplete. Copy and insertion blocked.' : 'Review the entire proposed draft before approving.');
+  } catch (error) {
+    if (revision === version) setMessage(error.name === 'AbortError'
+      ? 'Local scan timed out. Nothing was inserted.' : 'Scan failed. Check the local server, token and extension origin.', true);
+  } finally {
+    clearTimeout(timer);
+    if (controller === request) { controller = null; $('#scan').disabled = false; }
+  }
 });
-
 $('#copy').addEventListener('click', async () => {
-  await navigator.clipboard.writeText(latest.sanitized_text);
-  setMessage('Sanitized draft copied. Paste it manually when ready.');
+  if (!allowed()) return;
+  try { await navigator.clipboard.writeText(latest.sanitized_text); setMessage('Reviewed draft copied.'); }
+  catch { setMessage('Clipboard unavailable.', true); }
 });
-
 $('#insert').addEventListener('click', async () => {
+  if (!allowed()) return;
+  const value = latest.sanitized_text;
+  $('#insert').disabled = true;
   try {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    const [{result}] = await chrome.scripting.executeScript({
-      target: {tabId: tab.id}, func: replaceFocusedField, args: [latest.sanitized_text]
-    });
-    if (!result) throw new Error('The focused field is unavailable. Use Copy instead.');
-    setMessage('Focused field replaced. PrivacyGate did not submit it.');
-  } catch (error) { setMessage(error.message, true); }
+    await composer('insert', value, revision);
+    resetApproval(); target = null;
+    $('#target-label').textContent = 'Insertion complete. Reconnect before another insertion.';
+    setMessage('Inserted into ChatGPT. Inspect the composer; click Send yourself when ready.');
+  } catch (error) { disconnect(); setMessage(error.message, true); }
 });
-
-function resetApproval() { latest = null; $('#reviewed').checked = false; $('#reviewed').disabled = true; updateActions(); }
-function updateActions() { const allowed = Boolean(latest && $('#reviewed').checked && latest.status !== 'BLOCKED_UNVERIFIED'); $('#copy').disabled = !allowed; $('#insert').disabled = !allowed; }
+$('#clear').addEventListener('click', () => {
+  $('#source').value = ''; disconnect(); setMessage('Private draft and result cleared from this panel.');
+});
+function resetApproval() {
+  revision++; controller?.abort();
+  latest = null; $('#output').hidden = true; $('#result').value = '';
+  $('#summary').textContent = ''; $('#warnings').textContent = '';
+  $('#reviewed').checked = false; $('#reviewed').disabled = true; updateActions();
+}
+function updateActions() { $('#copy').disabled = !allowed(); $('#insert').disabled = !(allowed() && target); }
 function setMessage(text, error = false) { $('#message').textContent = text; $('#message').style.color = error ? '#a43131' : '#617068'; }
-
-function readFocusedField() {
-  const node = document.activeElement;
-  if (node instanceof HTMLTextAreaElement || (node instanceof HTMLInputElement && /^(text|search|email|url|tel)$/.test(node.type))) return node.value;
-  if (node?.isContentEditable) return node.innerText;
-  return '';
-}
-
-function replaceFocusedField(value) {
-  const node = document.activeElement;
-  if (node instanceof HTMLTextAreaElement || (node instanceof HTMLInputElement && /^(text|search|email|url|tel)$/.test(node.type))) {
-    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value')?.set;
-    if (!setter) return false;
-    setter.call(node, value); node.dispatchEvent(new Event('input', {bubbles: true})); return true;
-  }
-  if (node?.isContentEditable) {
-    node.textContent = value; node.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: value})); return true;
-  }
-  return false;
-}
+resetApproval();

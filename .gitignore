@@ -11,3 +11,4 @@ __pycache__/
 *.png
 private_samples/
 reports/
+dist/

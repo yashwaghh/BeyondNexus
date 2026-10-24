@@ -34,3 +34,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Run iteration validator
         run: python scripts/validate_iteration.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test extension review and target guards
+        run: node --test extension/review.test.cjs

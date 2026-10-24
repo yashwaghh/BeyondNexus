@@ -28,9 +28,10 @@ Do **not** claim that arbitrary browser extensions can reliably intercept every 
 
 Suggested directory: `extension/manifest.json`, `service_worker.js`, `sidepanel.html`, `sidepanel.js`, `content_script.js`, `styles.css`, and tests. The extension should only request minimum browser privileges needed (e.g. `activeTab`, `scripting`, `storage` if necessary, `sidePanel` optional). Avoid broad host permissions when possible; local bridge origin may need an explicitly scoped permission.
 
-The implemented version uses an action popup and on-demand `chrome.scripting`
-calls rather than a persistent content script/service worker. This is smaller
-and preserves the user-gesture boundary. See `INTEGRATION_DECISION.md`.
+The implemented version uses a side panel, a worker that configures toolbar
+opening, and on-demand `chrome.scripting` calls. No persistent content script
+collects drafts. The ChatGPT adapter targets one visible composer and checks
+its text and conversation before insertion. Live browser acceptance is pending.
 
 **MVP user journey:**
 1. User writes or pastes a prompt in the extension's side panel or manually selects text from a website and invokes PrivacyGate.

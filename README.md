@@ -97,7 +97,7 @@ results cannot be copied through its approval button.
 The optional [`extension/`](extension/) directory contains a minimal Chrome
 Manifest V3 prototype. Load it unpacked, configure its exact origin and local
 bridge token as described in [`extension/README.md`](extension/README.md), then
-use it to capture a focused text field. It can copy or replace only after an
+ use its side panel to draft privately or capture a ChatGPT draft. It can copy or insert only after an
 explicit review; it never submits the field. This is a browser extension—not a
 guaranteed ChatGPT interception mechanism.
 

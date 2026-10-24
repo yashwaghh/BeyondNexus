@@ -26,6 +26,7 @@ Protect users **before** they share text/documents with cloud AI tools. Optimize
 | ADR-009 | Small uploads use deterministic PDF/text parsing plus rendered-page Gemma vision | Text extraction alone misses scanned/visual content; vision alone is untrusted | After target-Mac quality benchmark |
 | ADR-010 | Iteration-two upload review produces no redacted file | Model regions and PDF overlays are not secure deletion | After verified object-level redaction design |
 | ADR-011 | Use Pillow, pypdf and pypdfium2 for bounded local parsing/rendering | Cross-platform wheels and permissive PDFium bindings; avoids hosted conversion | Revisit after parser isolation/security audit |
+| ADR-012 | Use extension-owned side-panel composition for ChatGPT pre-entry review | In-chat skills cannot establish a pre-submission boundary; website drafts may already be visible to the site | After live browser acceptance and packaging review |
 
 ## Current implementation
 

@@ -27,8 +27,9 @@ replace—the pre-entry browser workflow.
 
 - `privacygate/web.py`: loopback-only UI and authenticated `POST /v1/scan`.
 - `privacygate/ui/`: local browser workbench with review-before-copy.
-- `extension/`: unpacked MV3 popup using only `activeTab`, `scripting`,
-  `storage`, and the exact loopback host permission.
+- `extension/`: unpacked MV3 side panel using `activeTab`, `scripting`,
+  `storage`, `sidePanel`, `clipboardWrite`, and the exact loopback host permission.
+  ChatGPT insertion is user-invoked, target-checked and never submits.
 - No automatic submit, request interception, file scanning, cloud model call,
   telemetry, remote code, or broad host permission.
 

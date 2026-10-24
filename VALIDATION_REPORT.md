@@ -5,13 +5,20 @@
 **Python:** 3.13.11
 **LM Studio Endpoint:** `http://127.0.0.1:1234/v1` (loopback only)
 **Loaded Fallback Model:** `gemma4-e2b-instruct-pure` (Gemma 4 E2B instruction-tuned Q4)
-**Scope:** Complete local validation on target Apple Silicon hardware — 46 unit tests, rule benchmarks, CLI fail-closed smoke tests, macOS preflight checks, and **live Gemma fallback inference** through LM Studio.
+**Scope:** Automated validation and live text fallback on target Apple Silicon hardware — 46 unit tests, rule benchmarks, CLI fail-closed smoke tests, macOS preflight checks, and **live Gemma text fallback inference** through LM Studio. Live image/PDF vision is not covered by the evidence below.
 
 ---
 
 ## Executive Summary: ✅ PASS
 
-The local Gemma fallback option is **verified and fully operational** on this Apple Silicon Mac. All 46 unit tests pass, required files (31/31) are present, and live inference with `gemma4-e2b-instruct-pure` successfully detects contextual exact spans (e.g. `PERSON`) that rule-only regex cannot catch.
+The local Gemma text fallback passed the documented synthetic smoke cases on this Apple Silicon Mac. All 46 unit tests pass, required files (31/31) are present, and live inference with `gemma4-e2b-instruct-pure` successfully detects contextual exact spans (e.g. `PERSON`) that rule-only regex cannot catch. This establishes basic text integration, not general detection accuracy or iteration-two vision readiness.
+
+### Review qualification (2026-10-24)
+- Live image/PDF inference remains **UNVERIFIED**: run `python scripts/smoke_local_uploads.py` on the target Mac and record both cases' vision labels, success flags and timings.
+- The 46 automated tests include mocked model responses; they do not establish live vision capability or recall.
+- Text inference took 22.24–52.74 seconds in the recorded cases. The UI/client defaults to 75 seconds per model request; upload smoke uses 120 seconds. Vision must be tested against the UI timeout as well as the smoke script.
+- Use `python -m privacygate.macos_check --smoke --timeout 75` for the documented text check: the command's default 8-second timeout also applies to inference and is shorter than the recorded latency.
+- No live UI/extension test, multilingual benchmark, memory-pressure measurement or runtime network capture is included in this report.
 
 ---
 
@@ -180,8 +187,8 @@ Text with contextual hints without model analysis correctly fails closed with `B
 ### Issue: Gemma 4 Extended Thinking Exhausted `max_tokens` Budget
 - **Symptom:** During initial live inference, requests completed with `finish_reason: "length"` and truncated JSON (e.g. `{"entities":[{"text":...`), causing JSON parsing failure and falling back to `BLOCKED_UNVERIFIED`.
 - **Root Cause:** Gemma 4 E2B uses extended reasoning (`reasoning_content`), generating ~200-290 thinking tokens before producing the assistant response. The hardcoded `max_tokens: 350` left fewer than 60 tokens for the completion.
-- **Resolution:** Updated `max_tokens` to `1024` in `privacygate/model.py` (both text `detect()` and `detect_image()`).
-- **Verification:** After increasing the limit, model inference completes cleanly with full JSON responses and zero truncation.
+- **Resolution:** Updated `max_tokens` to `1024` in `privacygate/model.py` (text `detect()` was 350; `detect_image()` was 450).
+- **Verification:** The recorded text smoke cases completed with usable JSON after increasing the limit. Live vision and longer responses remain unverified; 1024 tokens cannot guarantee absence of truncation for every input.
 
 ---
 

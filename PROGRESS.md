@@ -113,3 +113,26 @@
 - Residual risks / unsolved: Model inference takes ~22-52s per request on 8 GB unified memory; prompt/payload cap must be respected; human approval gate remains mandatory.
 - Next owner/action: Test local UI and optional unpacked Chrome extension with live fallback running.
 
+### 2026-10-24 IST — Review — Pulled target-Mac validation evidence
+- Goal: review latest Mac results and check for regressions after fast-forward pull to `29d5f1c`.
+- Files changed: qualified `VALIDATION_REPORT.md` scope and token-budget evidence; this handoff entry.
+- Test commands + aggregate results: `python scripts/validate_iteration.py --record` PASS (31/31 files, 46 tests, benchmark exit 0, fail-closed CLI PASS); `python -m pip check` PASS on this Windows review host.
+- Evidence: upstream report records M1 8 GB live text fallback success at 22.24s and 52.74s, with output token budget raised to 1024. Text was previously 350 tokens; vision was 450, not 350.
+- Model/hardware verification: reviewed upstream Mac evidence; no live Mac/model access in this review. No live image/PDF results were present.
+- Risks / unfinished: vision capability, vision latency versus UI's 75s timeout (smoke uses 120s), memory pressure, UI/extension live behavior and multilingual quality remain unverified. Mac preflight smoke needs explicit `--timeout 75` because default 8s also applies to inference.
+- Next owner/action: run `python scripts/smoke_local_uploads.py` on the Mac, record sanitized aggregate results, then exercise both uploads in the UI with its actual timeout. Do not mark iteration-two live vision complete based on text fallback tests.
+
+### 2026-10-24 IST — Browser integration — ChatGPT pre-entry review panel
+- Goal: provide a testable browser plugin before sharing a draft with ChatGPT. Implemented a Chrome extension rather than an in-chat skill, whose execution would be after submission.
+- Files changed: extension manifest/side-panel UI/worker, ChatGPT composer adapter, synthetic JS tests, packaging script, Mac CI, setup and architecture documentation.
+- Logic: private draft in panel memory -> authenticated fixed-loopback text scan -> explicit human approval -> verify active tab, conversation URL and unchanged captured composer -> insert reviewed draft without Send. Click the toolbar icon to grant temporary activeTab access; no permanent ChatGPT host permission.
+- Approval guards: source/mode/config edits, target navigation, tab switch, failed rescan and late responses invalidate prior results. Unsupported/ambiguous editors fail closed with copy fallback. Draft/result values are not stored in browser storage.
+- Test commands + aggregate results: `node --test extension/review.test.cjs` covers approval/race guards and synthetic textarea/contenteditable adapters; `python scripts/validate_iteration.py --record` PASS (31/31 files, 46 Python tests); JS syntax and diff checks pass. Packaging script produces a nine-file ZIP excluding tests and secrets.
+- Model/hardware verification: no new live model or live ChatGPT browser validation in this work. Mac text smoke remains upstream evidence; Mac image/PDF vision remains pending.
+- Residual risks: ChatGPT DOM/editor compatibility and activeTab/side-panel behavior need actual Chrome acceptance; network capture and independent security review remain pending. Existing website drafts may already be exposed; insertion exposes the reviewed text before Send. No attachment transfer or secure file export added.
+- Next owner/action: follow extension/README.md on Chrome with synthetic data; record insertion without sending, changed-target/error cases and network evidence. Continue Mac upload smoke separately.
+
+
+- 2026-10-24T16:59:00+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
+
+- 2026-10-24T17:06:14+00:00 | Validation agent | PASS | files=31/31, tests=46; live text/vision model and external integrations unverified.
